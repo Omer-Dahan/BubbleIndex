@@ -61,7 +61,7 @@ export default function ScreenIndicators({ data, palette, onCyclePalette, onNavi
             {/* Row labels */}
             <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', paddingTop: 18 }}>
               {INDICATORS.map((ind) => (
-                <div key={ind.key}>
+                <div key={ind.key} className="bi-hoverable" onClick={() => onNavigate(`methodology:${ind.key}`)} style={{ cursor: 'pointer', borderRadius: 6, padding: '4px 6px' }}>
                   <div style={{ fontSize: 13, color: 'var(--ink-1)', fontWeight: 500 }}>{ind.name}</div>
                   <div className="mono" style={{ fontSize: 9, color: 'var(--ink-4)', marginTop: 2, letterSpacing: '0.06em' }}>{ind.desc.toUpperCase()}</div>
                 </div>

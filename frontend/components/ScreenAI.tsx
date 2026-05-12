@@ -12,10 +12,10 @@ interface Props {
 }
 
 const INSIGHTS = [
-  { tag: 'CONCENTRATION', verb: 'SELL',    text: 'Top-10 names = 38% of S&P cap. Last reading this high was Feb 2000.' },
-  { tag: 'VALUATION',     verb: 'CAUTION', text: 'CAPE at elevated levels — above the 50-year mean. Reverts within 4y in 92% of cases.' },
-  { tag: 'LIQUIDITY',     verb: 'HOLD',    text: 'Fed balance sheet contracting, but M2 still above pre-pandemic trend.' },
-  { tag: 'SENTIMENT',     verb: 'WATCH',   text: 'AAII bullish reading elevated. Margin debt rising year-over-year.' },
+  { tag: 'CONCENTRATION', verb: 'SELL',    categoryId: 'concentration',    text: 'Top-10 names = 38% of S&P cap. Last reading this high was Feb 2000.' },
+  { tag: 'VALUATION',     verb: 'CAUTION', categoryId: 'valuation',        text: 'CAPE at elevated levels — above the 50-year mean. Reverts within 4y in 92% of cases.' },
+  { tag: 'LEVERAGE',      verb: 'HOLD',    categoryId: 'leverage_credit',  text: 'Fed balance sheet contracting, but M2 still above pre-pandemic trend.' },
+  { tag: 'SENTIMENT',     verb: 'WATCH',   categoryId: 'sentiment',        text: 'AAII bullish reading elevated. Margin debt rising year-over-year.' },
 ];
 
 const VERB_SCORE: Record<string, number> = { SELL: 90, CAUTION: 70, WATCH: 50, HOLD: 30, BUY: 10 };
@@ -51,7 +51,7 @@ export default function ScreenAI({ data, palette, onCyclePalette, onNavigate }: 
             {INSIGHTS.map((ins, i) => {
               const t = riskTier(VERB_SCORE[ins.verb] ?? 50);
               return (
-                <div key={i} className="bi-card bi-hoverable" style={{ display: 'grid', gridTemplateColumns: '120px 1fr 90px', gap: 18, alignItems: 'center' }}>
+                <div key={i} className="bi-card bi-hoverable" onClick={() => onNavigate(`methodology:${ins.categoryId}`)} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 90px', gap: 18, alignItems: 'center', cursor: 'pointer' }}>
                   <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.16em' }}>{ins.tag}</div>
                   <div style={{ fontSize: 15, color: 'var(--ink-1)', lineHeight: 1.4 }}>{ins.text}</div>
                   <div className="mono" style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 600, color: t.tone, textAlign: 'right' }}>{ins.verb}</div>

@@ -14,6 +14,7 @@ const NAV = [
   ['indicators', 'Indicators'],
   ['replay', 'Replay'],
   ['ai', 'AI Insights'],
+  ['methodology', 'Methodology'],
 ] as const;
 
 export default function Topbar({ active, palette, onCyclePalette, onNavigate }: Props) {

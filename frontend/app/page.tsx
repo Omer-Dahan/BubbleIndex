@@ -5,15 +5,17 @@ import ScreenHistorical from '@/components/ScreenHistorical';
 import ScreenIndicators from '@/components/ScreenIndicators';
 import ScreenReplay from '@/components/ScreenReplay';
 import ScreenAI from '@/components/ScreenAI';
+import ScreenMethodology from '@/components/ScreenMethodology';
 import ScreenFooter from '@/components/ScreenFooter';
 import { api } from '@/lib/api';
 import type { RiskScoreResponse, GaugeKind, Palette, Density, Theme } from '@/lib/types';
 
-type Screen = 'home' | 'historical' | 'indicators' | 'replay' | 'ai' | 'footer';
+type Screen = 'home' | 'historical' | 'indicators' | 'replay' | 'ai' | 'methodology' | 'footer';
 const PALETTES: Palette[] = ['temperature', 'traffic', 'violet', 'mono'];
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
+  const [focusCategory, setFocusCategory] = useState<string | undefined>();
   const [data, setData] = useState<RiskScoreResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,11 +68,22 @@ export default function App() {
     ? { ...data, composite_score: overrideScore }
     : data;
 
+  const handleNavigate = useCallback((s: string) => {
+    if (s.startsWith('methodology:')) {
+      const cat = s.split(':')[1];
+      setFocusCategory(cat);
+      setScreen('methodology');
+    } else {
+      setFocusCategory(undefined);
+      setScreen(s as Screen);
+    }
+  }, []);
+
   const screenProps = {
     data: effectiveData,
     palette,
     onCyclePalette: cyclePalette,
-    onNavigate: (s: string) => setScreen(s as Screen),
+    onNavigate: handleNavigate,
   };
 
   return (
@@ -96,7 +109,8 @@ export default function App() {
       {screen === 'indicators'  && <ScreenIndicators {...screenProps} />}
       {screen === 'replay'      && <ScreenReplay     {...screenProps} />}
       {screen === 'ai'          && <ScreenAI         {...screenProps} />}
-      {screen === 'footer'      && <ScreenFooter palette={palette} onCyclePalette={cyclePalette} onNavigate={s => setScreen(s as Screen)} />}
+      {screen === 'methodology' && <ScreenMethodology {...screenProps} focusCategory={focusCategory} />}
+      {screen === 'footer'      && <ScreenFooter palette={palette} onCyclePalette={cyclePalette} onNavigate={handleNavigate} />}
 
       {/* Tweaks panel */}
       <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9990 }}>

@@ -113,7 +113,7 @@ export default function ScreenHome({ data, gaugeKind, palette, onCyclePalette, o
                 const tone = tempVar(s.value);
                 const above = s.value > s.median;
                 return (
-                  <div key={s.id} className="bi-hoverable" style={{ padding: '14px 16px', border: '1px solid var(--hairline)', borderRadius: 10, background: 'var(--panel-2)', display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
+                  <div key={s.id} className="bi-hoverable" onClick={() => onNavigate(`methodology:${s.id}`)} style={{ padding: '14px 16px', border: '1px solid var(--hairline)', borderRadius: 10, background: 'var(--panel-2)', display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0, cursor: 'pointer' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
                         <div style={{ fontSize: 13, color: 'var(--ink-1)', fontWeight: 500 }}>{s.display_name}</div>
