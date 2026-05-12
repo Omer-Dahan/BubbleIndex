@@ -22,13 +22,13 @@ FRED_SERIES = {
 }
 
 # Series that are quarterly/annual — cannot request daily frequency
-LOW_FREQUENCY_SERIES = {"GDP", "DDDM01USA156NWDB", "UNRATE", "FEDFUNDS", "WILL5000PR"}
+LOW_FREQUENCY_SERIES = {"GDP", "DDDM01USA156NWDB", "UNRATE", "FEDFUNDS", "WILL5000PR", "SP500PE"}
 
 # max staleness in days per series
 STALENESS_DAYS = {
     "VIXCLS": 5, "DGS2": 5, "DGS10": 5, "FEDFUNDS": 40, "UNRATE": 40,
     "GDP": 100, "DDDM01USA156NWDB": 400, "BAMLH0A0HYM2": 5,
-    "SP500": 5, "WILL5000IND": 5,
+    "SP500": 5, "WILL5000IND": 5, "SP500PE": 40,
 }
 
 BASE_URL = "https://api.stlouisfed.org/fred/series/observations"

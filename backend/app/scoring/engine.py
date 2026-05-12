@@ -31,7 +31,7 @@ FRED_SERIES_MAP = {
     "VIX":               "VIXCLS",
     "YIELD_2Y":          "DGS2",
     "YIELD_10Y":         "DGS10",
-    "WILSHIRE5000":      "WILL5000IND",
+    "WILSHIRE5000":      "WILL5000PR",
     "GDP":               "GDP",
     "BUFFETT_INDICATOR": "DDDM01USA156NWDB",
     "UNEMPLOYMENT":      "UNRATE",
@@ -90,12 +90,24 @@ class ScoringEngine:
         )
         return [self._snapshot_to_dict(s) for s in snaps]
 
+    def _load_from_db(self, series_id: str, days: int) -> pd.DataFrame:
+        cutoff = date.today() - timedelta(days=days)
+        rows = (
+            self.session.query(IndicatorSeries)
+            .filter(IndicatorSeries.series_id == series_id, IndicatorSeries.date >= cutoff)
+            .order_by(IndicatorSeries.date)
+            .all()
+        )
+        if not rows:
+            return pd.DataFrame({"date": [], "value": []})
+        return pd.DataFrame([{"date": r.date, "value": r.value} for r in rows])
+
     def _compute_and_save(self, today: date) -> dict:
         warnings: list[str] = []
         end = today
-        start = today - timedelta(days=90)  # fetch last 90 days of data
+        start = today - timedelta(days=90)
 
-        # Fetch data
+        # Fetch daily FRED series (90-day window, file-cached)
         data = {}
         for name, fred_id in FRED_SERIES_MAP.items():
             try:
@@ -104,9 +116,27 @@ class ScoringEngine:
                 logger.warning("Failed to fetch %s: %s", name, e)
                 data[name] = pd.DataFrame({"date": [], "value": []})
 
+        # Override low-frequency series from local DB — avoids cache-window mismatch
+        data["UNEMPLOYMENT"] = self._load_from_db("UNRATE", days=400)
+        data["GDP"] = self._load_from_db("GDP", days=600)
+        # Buffett indicator: use DDDM01USA156NWDB if recent enough, else fallback to SP500/GDP
+        buffett_db = self._load_from_db("DDDM01USA156NWDB", days=600)
+        if buffett_db.empty:
+            # DDDM01USA156NWDB not recent — use all available for percentile context
+            buffett_db = self._load_from_db("DDDM01USA156NWDB", days=365 * 25)
+        data["BUFFETT_INDICATOR"] = buffett_db
+        # WILL5000PR removed from FRED — use SP500 as Wilshire proxy for fallback
+        data["WILSHIRE5000"] = self._load_from_db("SP500", days=400)
+
         pe_yf = self.yf.fetch_pe_ratio()
         pe_finnhub = self.finnhub.fetch_pe_ratio()
         pe = pe_yf or pe_finnhub
+        # Fallback: use latest sp500_pe from local CSV data if live fetch unavailable
+        if pe is None:
+            pe_db = self._load_from_db("sp500_pe", days=60)
+            if not pe_db.empty:
+                pe = float(pe_db.iloc[-1]["value"])
+                logger.info("Using sp500_pe from local DB: %.2f", pe)
         top10 = self.yf.fetch_top_holdings_concentration()
 
         # Compute raw indicators

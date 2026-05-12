@@ -43,3 +43,7 @@ backend/data/*.sqlite3
 .idea/
 *.swp
 *.swo
+
+# Documentation (as per user rules)
+*.md
+!README.md

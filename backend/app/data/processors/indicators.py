@@ -64,10 +64,13 @@ def compute_vix_trend(vix_df: pd.DataFrame, lookback_days: int = 30) -> float | 
 
 def compute_unemployment_trend(unemp_df: pd.DataFrame, lookback_months: int = 6) -> float | None:
     current = _latest(unemp_df)
-    past = _value_n_days_ago(unemp_df, lookback_months * 21)
-    if current is None or past is None:
+    if current is None or unemp_df is None or unemp_df.empty:
         return None
-    return current - past
+    # UNRATE is monthly — need at least lookback_months+1 rows
+    if len(unemp_df) >= lookback_months + 1:
+        past = float(unemp_df.iloc[-(lookback_months + 1)]["value"])
+        return current - past
+    return None
 
 
 def compute_sp500_pe(pe: float | None) -> float | None:

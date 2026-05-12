@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     app_name: str = "BubbleIndex"
     debug: bool = False
     cors_origins: List[str] = ["http://localhost:3000"]
+    daily_sync_hour_utc: int = 18
 
     class Config:
         env_file = ".env"

@@ -4,6 +4,8 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from app.config import get_settings
 from app.db.base import Base
@@ -14,6 +16,7 @@ from app.scoring.percentile import PercentileNormalizer
 from app.scoring.weights import ALL_INDICATOR_NAMES
 from app.scoring.engine import ScoringEngine
 from app.data.loaders.historical_bootstrap import HistoricalBootstrapper
+from app.data.loaders.daily_sync import run_daily_sync
 from app.api.v1.router import router as v1_router
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -50,6 +53,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Bootstrap warning: %s", e)
 
+    # Incremental gap-fill (handles restarts after downtime + migration for upgrades)
+    try:
+        bootstrapper.run_incremental_if_stale(staleness_days=2)
+    except Exception as e:
+        logger.warning("Incremental sync warning: %s", e)
+
     # Warm percentile normalizer
     normalizer = PercentileNormalizer(session)
     try:
@@ -61,9 +70,25 @@ async def lifespan(app: FastAPI):
     app.state.scoring_engine = scoring_engine
     app.state.db_session = session
 
+    # Setup APScheduler for nightly sync
+    factory = get_session_factory()
+    scheduler = BackgroundScheduler(timezone="UTC")
+    scheduler.add_job(
+        run_daily_sync,
+        CronTrigger(hour=settings.daily_sync_hour_utc, minute=0, timezone="UTC"),
+        args=[factory, settings, normalizer, PERCENTILE_SERIES],
+        id="nightly_sync",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    scheduler.start()
+    app.state.scheduler = scheduler
+    logger.info("Nightly sync scheduled at %02d:00 UTC", settings.daily_sync_hour_utc)
+
     logger.info("BubbleIndex API ready")
     yield
 
+    scheduler.shutdown(wait=False)
     session.close()
 
 
