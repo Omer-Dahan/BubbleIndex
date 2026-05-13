@@ -108,30 +108,13 @@ def compute_sp500_ps(df: pd.DataFrame) -> float | None:
 
 
 def compute_cpi_yoy(df: pd.DataFrame) -> float | None:
-    if df is None or len(df) < 13:
-        return None
-    try:
-        latest = float(df.iloc[-1]["value"])
-        past_12 = float(df.iloc[-13]["value"])
-        if past_12 == 0:
-            return None
-        return (latest - past_12) / past_12 * 100
-    except (IndexError, ValueError, KeyError):
-        return None
+    # df contains pre-computed cpi_yoy values — just take the latest
+    return _latest(df)
 
 
 def compute_margin_debt_yoy(df: pd.DataFrame) -> float | None:
-    if df is None or len(df) < 5:
-        return None
-    try:
-        latest = float(df.iloc[-1]["value"])
-        # quarterly data — 4 rows back ≈ 1 year
-        past = float(df.iloc[-5]["value"])
-        if past == 0:
-            return None
-        return (latest - past) / past * 100
-    except (IndexError, ValueError, KeyError):
-        return None
+    # df contains pre-computed margin_debt_yoy values — just take the latest
+    return _latest(df)
 
 
 def compute_ipo_volume_yoy(df: pd.DataFrame) -> float | None:

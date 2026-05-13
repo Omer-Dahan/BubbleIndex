@@ -39,6 +39,17 @@ class PercentileNormalizer:
         )
         return np.array([r[0] for r in rows], dtype=float)
 
+    # Synthetic historical baselines for series with insufficient DB history.
+    # Values represent typical 20-year range; used only when DB has < 10 points.
+    _SYNTHETIC_HISTORY: dict[str, list[float]] = {
+        "top10_concentration": [
+            15, 16, 16, 17, 17, 17, 18, 18, 18, 19,
+            19, 20, 20, 21, 21, 22, 23, 24, 25, 26,
+            27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+            37, 38, 39, 40,
+        ],
+    }
+
     def normalize(self, series_id: str, current_value: float, invert: bool = False, as_of_date: date | None = None) -> float:
         if as_of_date is not None:
             arr = self._load_historical(series_id, 20, as_of_date)
@@ -52,8 +63,13 @@ class PercentileNormalizer:
         if arr is None or len(arr) < 10:
             arr = self._load_historical(series_id, 20)
             if len(arr) < 10:
-                logger.warning("No history for %s, returning 50", series_id)
-                return 50.0
+                synthetic = self._SYNTHETIC_HISTORY.get(series_id)
+                if synthetic:
+                    arr = np.array(synthetic, dtype=float)
+                    logger.info("Using synthetic history for %s (%d points)", series_id, len(arr))
+                else:
+                    logger.warning("No history for %s, returning 50", series_id)
+                    return 50.0
             self._cache[series_id] = arr
 
         pct = float(stats.percentileofscore(arr, current_value, kind="rank"))
