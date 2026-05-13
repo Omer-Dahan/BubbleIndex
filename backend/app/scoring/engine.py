@@ -132,8 +132,8 @@ class ScoringEngine:
         data["SHILLER_CAPE"] = self._load_from_db("shiller_cape", days=60)
         data["SP500_PS"] = self._load_from_db("sp500_ps", days=60)
         data["CPI_YOY"] = self._load_from_db("cpi_yoy", days=60)
-        data["MARGIN_DEBT_YOY"] = self._load_from_db("margin_debt_yoy", days=120)
-        data["IPO_VOLUME_YOY"] = self._load_from_db("ipo_volume_yoy", days=400)
+        data["MARGIN_DEBT_YOY"] = self._load_from_db("margin_debt_yoy", days=500)
+        data["IPO_VOLUME_YOY"] = self._load_from_db("ipo_volume_yoy", days=600)
 
         pe_yf = self.yf.fetch_pe_ratio()
         pe_finnhub = self.finnhub.fetch_pe_ratio()
