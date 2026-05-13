@@ -169,7 +169,7 @@ function RiskCard({ s, onNavigate }: { s: SubscoreItem; onNavigate: (s: string) 
       </div>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Sparkline data={s.trend} h={28} stroke={tone} fill fluid yMin={0} yMax={1} />
+          <Sparkline data={s.trend} h={28} stroke={tone} fill fluid />
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.06em' }}>30D</div>

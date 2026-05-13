@@ -48,7 +48,7 @@ export default function App() {
     setLoading(true);
     const scorePromise = api.getLatestScore()
       .catch(() => api.getRiskScore());
-    const snapshotsPromise = api.getSnapshots(730).catch(() => []);
+    const snapshotsPromise = api.getAllSnapshots().catch(() => api.getSnapshots(730)).catch(() => []);
 
     Promise.all([scorePromise, snapshotsPromise])
       .then(([d, snaps]) => {
@@ -115,7 +115,7 @@ export default function App() {
 
       {/* Screens */}
       {screen === 'home'        && <ScreenHome       {...screenProps} gaugeKind={gaugeKind} snapshots={snapshots} />}
-      {screen === 'historical'  && <ScreenHistorical {...screenProps} />}
+      {screen === 'historical'  && <ScreenHistorical {...screenProps} snapshots={snapshots} />}
       {screen === 'indicators'  && <ScreenIndicators {...screenProps} />}
       {screen === 'replay'      && <ScreenReplay     {...screenProps} />}
       {screen === 'ai'          && <ScreenAI         {...screenProps} />}

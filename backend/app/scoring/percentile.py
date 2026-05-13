@@ -24,20 +24,30 @@ class PercentileNormalizer:
             else:
                 logger.warning("Insufficient history for %s: %d points", name, len(arr))
 
-    def _load_historical(self, series_id: str, years: int) -> np.ndarray:
-        cutoff = date.today() - timedelta(days=years * 365)
+    def _load_historical(self, series_id: str, years: int, as_of_date: date | None = None) -> np.ndarray:
+        reference = as_of_date or date.today()
+        cutoff = reference - timedelta(days=years * 365)
         rows = (
             self.session.query(IndicatorSeries.value)
             .filter(
                 IndicatorSeries.series_id == series_id,
                 IndicatorSeries.date >= cutoff,
+                IndicatorSeries.date <= reference,
             )
             .order_by(IndicatorSeries.date)
             .all()
         )
         return np.array([r[0] for r in rows], dtype=float)
 
-    def normalize(self, series_id: str, current_value: float, invert: bool = False) -> float:
+    def normalize(self, series_id: str, current_value: float, invert: bool = False, as_of_date: date | None = None) -> float:
+        if as_of_date is not None:
+            arr = self._load_historical(series_id, 20, as_of_date)
+            if len(arr) < 10:
+                logger.warning("No history for %s at %s, returning 50", series_id, as_of_date)
+                return 50.0
+            pct = float(stats.percentileofscore(arr, current_value, kind="rank"))
+            return 100.0 - pct if invert else pct
+
         arr = self._cache.get(series_id)
         if arr is None or len(arr) < 10:
             arr = self._load_historical(series_id, 20)

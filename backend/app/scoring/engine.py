@@ -14,7 +14,9 @@ from app.data.processors.indicators import (
     compute_buffett_indicator, compute_yield_curve_spread,
     compute_vix_level, compute_vix_trend, compute_unemployment_trend,
     compute_sp500_pe, compute_hy_spread, compute_fed_funds_level,
-    compute_concentration, get_data_date,
+    compute_concentration, compute_shiller_cape, compute_sp500_ps,
+    compute_cpi_yoy, compute_margin_debt_yoy, compute_ipo_volume_yoy,
+    get_data_date,
 )
 from app.scoring.percentile import PercentileNormalizer
 from app.scoring.weights import WEIGHT_CONFIG, score_to_label, ALL_INDICATOR_NAMES
@@ -122,11 +124,16 @@ class ScoringEngine:
         # Buffett indicator: use DDDM01USA156NWDB if recent enough, else fallback to SP500/GDP
         buffett_db = self._load_from_db("DDDM01USA156NWDB", days=600)
         if buffett_db.empty:
-            # DDDM01USA156NWDB not recent — use all available for percentile context
             buffett_db = self._load_from_db("DDDM01USA156NWDB", days=365 * 25)
         data["BUFFETT_INDICATOR"] = buffett_db
         # WILL5000PR removed from FRED — use SP500 as Wilshire proxy for fallback
         data["WILSHIRE5000"] = self._load_from_db("SP500", days=400)
+        # New indicators
+        data["SHILLER_CAPE"] = self._load_from_db("shiller_cape", days=60)
+        data["SP500_PS"] = self._load_from_db("sp500_ps", days=60)
+        data["CPI_YOY"] = self._load_from_db("cpi_yoy", days=60)
+        data["MARGIN_DEBT_YOY"] = self._load_from_db("margin_debt_yoy", days=120)
+        data["IPO_VOLUME_YOY"] = self._load_from_db("ipo_volume_yoy", days=400)
 
         pe_yf = self.yf.fetch_pe_ratio()
         pe_finnhub = self.finnhub.fetch_pe_ratio()
@@ -138,6 +145,12 @@ class ScoringEngine:
                 pe = float(pe_db.iloc[-1]["value"])
                 logger.info("Using sp500_pe from local DB: %.2f", pe)
         top10 = self.yf.fetch_top_holdings_concentration()
+        # Fallback: use last stored value from DB if live fetch unavailable
+        if top10 is None:
+            top10_db = self._load_from_db("top10_concentration", days=400)
+            if not top10_db.empty:
+                top10 = float(top10_db.iloc[-1]["value"])
+                logger.info("Using top10_concentration from DB: %.1f", top10)
 
         # Compute raw indicators
         buffett_val, buffett_src = compute_buffett_indicator(
@@ -153,16 +166,26 @@ class ScoringEngine:
         hy_spread = compute_hy_spread(data.get("HY_SPREAD", pd.DataFrame()))
         fed_funds = compute_fed_funds_level(data.get("FED_FUNDS", pd.DataFrame()))
         concentration = compute_concentration(top10)
+        shiller_cape = compute_shiller_cape(data.get("SHILLER_CAPE", pd.DataFrame()))
+        sp500_ps = compute_sp500_ps(data.get("SP500_PS", pd.DataFrame()))
+        cpi_yoy = compute_cpi_yoy(data.get("CPI_YOY", pd.DataFrame()))
+        margin_debt_yoy = compute_margin_debt_yoy(data.get("MARGIN_DEBT_YOY", pd.DataFrame()))
+        ipo_volume_yoy = compute_ipo_volume_yoy(data.get("IPO_VOLUME_YOY", pd.DataFrame()))
 
         raw = {
             "buffett_indicator":   buffett_val,
+            "shiller_cape":        shiller_cape,
             "sp500_pe":            sp500_pe,
+            "sp500_ps":            sp500_ps,
             "yield_curve_spread":  yield_spread,
             "fed_funds_level":     fed_funds,
             "unemployment_trend":  unemp_trend,
+            "cpi_yoy":             cpi_yoy,
             "vix_level":           vix_level,
             "hy_spread":           hy_spread,
+            "margin_debt_yoy":     margin_debt_yoy,
             "vix_trend":           vix_trend,
+            "ipo_volume_yoy":      ipo_volume_yoy,
             "top10_concentration": concentration,
         }
 
@@ -178,13 +201,18 @@ class ScoringEngine:
                     # Use FRED series_id or indicator name for percentile lookup
                     series_map = {
                         "buffett_indicator":   "DDDM01USA156NWDB",
+                        "shiller_cape":        "shiller_cape",
                         "sp500_pe":            "sp500_pe",
+                        "sp500_ps":            "sp500_ps",
                         "yield_curve_spread":  "yield_curve_spread",
                         "fed_funds_level":     "FEDFUNDS",
                         "unemployment_trend":  "unemp_trend",
+                        "cpi_yoy":             "cpi_yoy",
                         "vix_level":           "VIXCLS",
                         "hy_spread":           "BAMLH0A0HYM2",
+                        "margin_debt_yoy":     "margin_debt_yoy",
                         "vix_trend":           "vix_trend",
+                        "ipo_volume_yoy":      "ipo_volume_yoy",
                         "top10_concentration": "top10_concentration",
                     }
                     sid = series_map.get(ind_id, ind_id)
@@ -255,7 +283,35 @@ class ScoringEngine:
             data_freshness=json.dumps(freshness),
             warnings=json.dumps(warnings),
         )
-        self.session.add(snap)
+        stmt = sqlite_insert(RiskSnapshot.__table__).values(
+            snapshot_date=snap.snapshot_date,
+            composite_score=snap.composite_score,
+            risk_label=snap.risk_label,
+            valuation_score=snap.valuation_score,
+            macro_stress_score=snap.macro_stress_score,
+            leverage_credit_score=snap.leverage_credit_score,
+            sentiment_score=snap.sentiment_score,
+            concentration_score=snap.concentration_score,
+            indicator_vector=snap.indicator_vector,
+            data_freshness=snap.data_freshness,
+            warnings=snap.warnings,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["snapshot_date"],
+            set_={
+                "composite_score": stmt.excluded.composite_score,
+                "risk_label": stmt.excluded.risk_label,
+                "valuation_score": stmt.excluded.valuation_score,
+                "macro_stress_score": stmt.excluded.macro_stress_score,
+                "leverage_credit_score": stmt.excluded.leverage_credit_score,
+                "sentiment_score": stmt.excluded.sentiment_score,
+                "concentration_score": stmt.excluded.concentration_score,
+                "indicator_vector": stmt.excluded.indicator_vector,
+                "data_freshness": stmt.excluded.data_freshness,
+                "warnings": stmt.excluded.warnings,
+            }
+        )
+        self.session.execute(stmt)
         self.session.commit()
 
         # Also upsert computed derived indicators for history
@@ -303,16 +359,35 @@ class ScoringEngine:
                 self.session.rollback()
 
     def _snapshot_to_dict(self, snap: RiskSnapshot) -> dict:
-        from app.scoring.weights import WEIGHT_CONFIG
         _, verb = score_to_label(snap.composite_score)
-        categories_raw = [
-            {"id": "valuation",       "display_name": "Valuation",         "weight": 0.30, "score": snap.valuation_score or 50.0,       "indicators": []},
-            {"id": "macro_stress",    "display_name": "Macro Stress",      "weight": 0.20, "score": snap.macro_stress_score or 50.0,     "indicators": []},
-            {"id": "leverage_credit", "display_name": "Leverage & Credit", "weight": 0.20, "score": snap.leverage_credit_score or 50.0,  "indicators": []},
-            {"id": "sentiment",       "display_name": "Sentiment",         "weight": 0.15, "score": snap.sentiment_score or 50.0,        "indicators": []},
-            {"id": "concentration",   "display_name": "Concentration",     "weight": 0.15, "score": snap.concentration_score or 50.0,    "indicators": []},
-        ]
         vec = json.loads(snap.indicator_vector or "{}")
+        cat_score_map = {
+            "valuation":       snap.valuation_score or 50.0,
+            "macro_stress":    snap.macro_stress_score or 50.0,
+            "leverage_credit": snap.leverage_credit_score or 50.0,
+            "sentiment":       snap.sentiment_score or 50.0,
+            "concentration":   snap.concentration_score or 50.0,
+        }
+        categories_raw = []
+        for cat_id, cat in WEIGHT_CONFIG.items():
+            inds = []
+            for ind_id, ind_cfg in cat["indicators"].items():
+                norm_score = vec.get(ind_id)
+                inds.append({
+                    "name": ind_id,
+                    "display_name": ind_cfg["display_name"],
+                    "raw_value": None,
+                    "raw_unit": ind_cfg["unit"],
+                    "normalized_score": round(norm_score, 1) if norm_score is not None else 50.0,
+                    "is_imputed": norm_score is None,
+                })
+            categories_raw.append({
+                "id": cat_id,
+                "display_name": cat["display_name"],
+                "weight": cat["weight"],
+                "score": round(cat_score_map.get(cat_id, 50.0), 1),
+                "indicators": inds,
+            })
         similarities = compute_similarities(vec)
         return {
             "composite_score": snap.composite_score,

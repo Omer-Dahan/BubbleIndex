@@ -6,36 +6,41 @@ WEIGHT_CONFIG = {
         "weight": 0.30,
         "display_name": "Valuation",
         "indicators": {
-            "buffett_indicator": {"weight": 0.60, "invert": False, "display_name": "Buffett Indicator", "unit": "%"},
-            "sp500_pe":          {"weight": 0.40, "invert": False, "display_name": "S&P 500 P/E Ratio",  "unit": "×"},
+            "buffett_indicator": {"weight": 0.30, "invert": False, "display_name": "Buffett Indicator",   "unit": "%"},
+            "shiller_cape":      {"weight": 0.25, "invert": False, "display_name": "Shiller CAPE",        "unit": "×"},
+            "sp500_pe":          {"weight": 0.20, "invert": False, "display_name": "S&P 500 P/E Ratio",   "unit": "×"},
+            "sp500_ps":          {"weight": 0.25, "invert": False, "display_name": "S&P 500 Price/Sales", "unit": "×"},
         },
     },
     "macro_stress": {
-        "weight": 0.20,
+        "weight": 0.25,
         "display_name": "Macro Stress",
         "indicators": {
-            "yield_curve_spread": {"weight": 0.40, "invert": True,  "display_name": "Yield Curve (10Y−2Y)",  "unit": "%"},
-            "fed_funds_level":    {"weight": 0.35, "invert": False, "display_name": "Fed Funds Rate",         "unit": "%"},
-            "unemployment_trend": {"weight": 0.25, "invert": False, "display_name": "Unemployment Δ 6M",      "unit": "pp"},
+            "yield_curve_spread": {"weight": 0.30, "invert": True,  "display_name": "Yield Curve (10Y−2Y)", "unit": "%"},
+            "fed_funds_level":    {"weight": 0.25, "invert": False, "display_name": "Fed Funds Rate",        "unit": "%"},
+            "unemployment_trend": {"weight": 0.20, "invert": False, "display_name": "Unemployment Δ 6M",     "unit": "pp"},
+            "cpi_yoy":            {"weight": 0.25, "invert": False, "display_name": "Inflation (CPI YoY)",   "unit": "%"},
         },
     },
     "leverage_credit": {
         "weight": 0.20,
         "display_name": "Leverage & Credit",
         "indicators": {
-            "vix_level": {"weight": 0.50, "invert": False, "display_name": "VIX Level",      "unit": "pts"},
-            "hy_spread": {"weight": 0.50, "invert": False, "display_name": "HY Credit Spread","unit": "%"},
+            "vix_level":        {"weight": 0.35, "invert": False, "display_name": "VIX Level",         "unit": "pts"},
+            "hy_spread":        {"weight": 0.35, "invert": False, "display_name": "HY Credit Spread",  "unit": "%"},
+            "margin_debt_yoy":  {"weight": 0.30, "invert": False, "display_name": "Margin Debt YoY",   "unit": "%"},
         },
     },
     "sentiment": {
         "weight": 0.15,
         "display_name": "Sentiment",
         "indicators": {
-            "vix_trend": {"weight": 1.00, "invert": False, "display_name": "VIX Trend 30D",  "unit": "%"},
+            "vix_trend":       {"weight": 0.60, "invert": False, "display_name": "VIX Trend 30D",    "unit": "%"},
+            "ipo_volume_yoy":  {"weight": 0.40, "invert": False, "display_name": "IPO Volume YoY",   "unit": "%"},
         },
     },
     "concentration": {
-        "weight": 0.15,
+        "weight": 0.10,
         "display_name": "Concentration",
         "indicators": {
             "top10_concentration": {"weight": 1.00, "invert": False, "display_name": "Top-10 Cap Share", "unit": "%"},

@@ -93,6 +93,51 @@ def compute_concentration(top10_pct: float | None) -> float | None:
     return None
 
 
+def compute_shiller_cape(df: pd.DataFrame) -> float | None:
+    v = _latest(df)
+    if v is not None and 5.0 < v < 60.0:
+        return v
+    return None
+
+
+def compute_sp500_ps(df: pd.DataFrame) -> float | None:
+    v = _latest(df)
+    if v is not None and 0.1 < v < 10.0:
+        return v
+    return None
+
+
+def compute_cpi_yoy(df: pd.DataFrame) -> float | None:
+    if df is None or len(df) < 13:
+        return None
+    try:
+        latest = float(df.iloc[-1]["value"])
+        past_12 = float(df.iloc[-13]["value"])
+        if past_12 == 0:
+            return None
+        return (latest - past_12) / past_12 * 100
+    except (IndexError, ValueError, KeyError):
+        return None
+
+
+def compute_margin_debt_yoy(df: pd.DataFrame) -> float | None:
+    if df is None or len(df) < 5:
+        return None
+    try:
+        latest = float(df.iloc[-1]["value"])
+        # quarterly data — 4 rows back ≈ 1 year
+        past = float(df.iloc[-5]["value"])
+        if past == 0:
+            return None
+        return (latest - past) / past * 100
+    except (IndexError, ValueError, KeyError):
+        return None
+
+
+def compute_ipo_volume_yoy(df: pd.DataFrame) -> float | None:
+    return _latest(df)
+
+
 def get_data_date(df: pd.DataFrame) -> date | None:
     if df is None or df.empty:
         return None

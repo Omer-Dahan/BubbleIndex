@@ -33,19 +33,33 @@ def get_snapshots(
     if end_date is None:
         end_date = date.today()
     if start_date is None:
-        start_date = end_date - timedelta(days=365)
+        start_date = date(1990, 1, 1)
 
     snaps = _get_engine(request).get_snapshots(start_date, end_date)
-    return [
-        SnapshotSummary(
-            snapshot_date=s["snapshot_date"],
-            composite_score=s["composite_score"],
-            risk_label=s["risk_label"],
-            valuation_score=s["categories"][0]["score"] if s["categories"] else 50.0,
-            macro_stress_score=s["categories"][1]["score"] if len(s["categories"]) > 1 else 50.0,
-            leverage_credit_score=s["categories"][2]["score"] if len(s["categories"]) > 2 else 50.0,
-            sentiment_score=s["categories"][3]["score"] if len(s["categories"]) > 3 else 50.0,
-            concentration_score=s["categories"][4]["score"] if len(s["categories"]) > 4 else 50.0,
-        )
-        for s in snaps
-    ]
+    return [_snap_to_summary(s) for s in snaps]
+
+
+@router.get("/snapshots/{snapshot_date}", response_model=SnapshotSummary)
+def get_snapshot_by_date(
+    snapshot_date: date,
+    request: Request,
+):
+    snaps = _get_engine(request).get_snapshots(snapshot_date, snapshot_date)
+    if not snaps:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"No snapshot found for {snapshot_date}")
+    return _snap_to_summary(snaps[0])
+
+
+def _snap_to_summary(s: dict) -> SnapshotSummary:
+    cats = s.get("categories", [])
+    return SnapshotSummary(
+        snapshot_date=s["snapshot_date"],
+        composite_score=s["composite_score"],
+        risk_label=s["risk_label"],
+        valuation_score=cats[0]["score"] if len(cats) > 0 else 50.0,
+        macro_stress_score=cats[1]["score"] if len(cats) > 1 else 50.0,
+        leverage_credit_score=cats[2]["score"] if len(cats) > 2 else 50.0,
+        sentiment_score=cats[3]["score"] if len(cats) > 3 else 50.0,
+        concentration_score=cats[4]["score"] if len(cats) > 4 else 50.0,
+    )

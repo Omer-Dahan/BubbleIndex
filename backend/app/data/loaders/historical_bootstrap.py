@@ -14,6 +14,8 @@ from app.core.cache import FileCache
 from app.data.fetchers.fred import FREDFetcher, FRED_SERIES
 from app.data.fetchers.yfinance_fetcher import YFinanceFetcher
 from app.data.fetchers.multpl import MultplFetcher
+from app.data.fetchers.shiller import ShillerFetcher
+from app.data.fetchers.ipo import IPOFetcher
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,8 @@ class HistoricalBootstrapper:
         self.fred = FREDFetcher(self.cache, settings)
         self.yf = YFinanceFetcher(self.cache, settings)
         self.multpl = MultplFetcher(self.cache, settings)
+        self.shiller = ShillerFetcher(self.cache, settings)
+        self.ipo = IPOFetcher(self.cache, settings)
         self._flag_path = Path(settings.cache_dir) / "bootstrap_done.flag"
 
     def run_if_needed(self) -> bool:
@@ -67,6 +71,11 @@ class HistoricalBootstrapper:
         self._compute_vix_trend_history(fred_data.get("VIX", pd.DataFrame()))
         self._compute_unemp_trend_history(fred_data.get("UNEMPLOYMENT", pd.DataFrame()))
         self._load_sp500_pe()
+        self._load_shiller_cape()
+        self._load_sp500_ps()
+        self._compute_cpi_yoy_history(fred_data.get("CPI", pd.DataFrame()))
+        self._compute_margin_debt_yoy_history(fred_data.get("MARGIN_DEBT", pd.DataFrame()))
+        self._load_ipo_volume()
 
         logger.info("Fetching yfinance series")
         for name, ticker in [("SP500_YF", "^GSPC"), ("VIX_YF", "^VIX")]:
@@ -172,6 +181,112 @@ class HistoricalBootstrapper:
         self.session.commit()
         logger.info("  Loaded sp500_pe from multpl: %d rows", len(rows))
 
+    def _load_shiller_cape(self) -> None:
+        df = self.shiller.fetch_cape_history()
+        if df.empty:
+            logger.warning("  shiller_cape: no data")
+            return
+        rows = [
+            {"series_id": "shiller_cape", "source": "multpl", "date": row["date"], "value": row["value"]}
+            for _, row in df.iterrows()
+        ]
+        stmt = sqlite_insert(IndicatorSeries).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["series_id", "date"],
+            set_={"value": stmt.excluded.value},
+        )
+        self.session.execute(stmt)
+        self.session.commit()
+        logger.info("  Loaded shiller_cape: %d rows", len(rows))
+
+    def _load_sp500_ps(self) -> None:
+        df = self.multpl.fetch_ps_history()
+        if df.empty:
+            logger.warning("  sp500_ps: no data")
+            return
+        rows = [
+            {"series_id": "sp500_ps", "source": "multpl", "date": row["date"], "value": row["value"]}
+            for _, row in df.iterrows()
+        ]
+        stmt = sqlite_insert(IndicatorSeries).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["series_id", "date"],
+            set_={"value": stmt.excluded.value},
+        )
+        self.session.execute(stmt)
+        self.session.commit()
+        logger.info("  Loaded sp500_ps: %d rows", len(rows))
+
+    def _compute_cpi_yoy_history(self, cpi_df: pd.DataFrame) -> None:
+        if cpi_df.empty or len(cpi_df) < 13:
+            logger.warning("  cpi_yoy: insufficient CPI data (%d rows)", len(cpi_df))
+            return
+        rows = []
+        for i in range(12, len(cpi_df)):
+            try:
+                latest = float(cpi_df.iloc[i]["value"])
+                past = float(cpi_df.iloc[i - 12]["value"])
+                if past == 0:
+                    continue
+                yoy = (latest - past) / past * 100
+                rows.append({"series_id": "cpi_yoy", "source": "computed",
+                              "date": cpi_df.iloc[i]["date"], "value": round(yoy, 4)})
+            except (ValueError, KeyError):
+                continue
+        if rows:
+            stmt = sqlite_insert(IndicatorSeries).values(rows)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["series_id", "date"],
+                set_={"value": stmt.excluded.value},
+            )
+            self.session.execute(stmt)
+            self.session.commit()
+            logger.info("  Computed cpi_yoy: %d rows", len(rows))
+
+    def _compute_margin_debt_yoy_history(self, margin_df: pd.DataFrame) -> None:
+        if margin_df.empty or len(margin_df) < 5:
+            logger.warning("  margin_debt_yoy: insufficient data (%d rows)", len(margin_df))
+            return
+        rows = []
+        for i in range(4, len(margin_df)):
+            try:
+                latest = float(margin_df.iloc[i]["value"])
+                past = float(margin_df.iloc[i - 4]["value"])
+                if past == 0:
+                    continue
+                yoy = (latest - past) / past * 100
+                rows.append({"series_id": "margin_debt_yoy", "source": "computed",
+                              "date": margin_df.iloc[i]["date"], "value": round(yoy, 4)})
+            except (ValueError, KeyError):
+                continue
+        if rows:
+            stmt = sqlite_insert(IndicatorSeries).values(rows)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["series_id", "date"],
+                set_={"value": stmt.excluded.value},
+            )
+            self.session.execute(stmt)
+            self.session.commit()
+            logger.info("  Computed margin_debt_yoy: %d rows", len(rows))
+
+    def _load_ipo_volume(self) -> None:
+        df = self.ipo.fetch_ipo_yoy_history()
+        if df.empty:
+            logger.warning("  ipo_volume_yoy: no data")
+            return
+        rows = [
+            {"series_id": "ipo_volume_yoy", "source": "ritter", "date": row["date"], "value": row["value"]}
+            for _, row in df.iterrows()
+        ]
+        stmt = sqlite_insert(IndicatorSeries).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["series_id", "date"],
+            set_={"value": stmt.excluded.value},
+        )
+        self.session.execute(stmt)
+        self.session.commit()
+        logger.info("  Loaded ipo_volume_yoy: %d rows", len(rows))
+
     def _ensure_derived_series_populated(self) -> None:
         if self._count_series("vix_trend") < 100:
             logger.info("Backfilling vix_trend from VIXCLS...")
@@ -242,7 +357,9 @@ class HistoricalBootstrapper:
                 self._compute_yield_curve_spread(fred_data)
                 self._compute_vix_trend_history(fred_data.get("VIX", pd.DataFrame()))
                 self._compute_unemp_trend_history(fred_data.get("UNEMPLOYMENT", pd.DataFrame()))
-                self._compute_sp500_pe_history(start, end)
+                self._load_sp500_pe()
+                self._compute_cpi_yoy_history(fred_data.get("CPI", pd.DataFrame()))
+                self._compute_margin_debt_yoy_history(fred_data.get("MARGIN_DEBT", pd.DataFrame()))
 
                 self.session.commit()
 
