@@ -2,20 +2,28 @@
 import { riskTier, tempVar } from '@/lib/utils';
 
 // Sparkline
-export function Sparkline({ data, w = 220, h = 56, stroke = 'var(--ink-2)', fill = true }: {
-  data: number[]; w?: number; h?: number; stroke?: string; fill?: boolean;
+export function Sparkline({ data, w = 220, h = 56, stroke = 'var(--ink-2)', fill = true, fluid = false, yMin, yMax }: {
+  data: number[]; w?: number; h?: number; stroke?: string; fill?: boolean; fluid?: boolean; yMin?: number; yMax?: number;
 }) {
   if (!data.length) return null;
-  const min = Math.min(...data), max = Math.max(...data);
+  const min = yMin !== undefined ? yMin : Math.min(...data);
+  const max = yMax !== undefined ? yMax : Math.max(...data);
   const range = max - min || 1;
+  const vw = 220;
   const pts = data.map((v, i) => [
-    (i / (data.length - 1)) * w,
+    (i / (data.length - 1)) * vw,
     h - ((v - min) / range) * (h - 6) - 3,
   ] as [number, number]);
   const d = pts.map(([x, y], i) => (i ? `L${x.toFixed(1)} ${y.toFixed(1)}` : `M${x.toFixed(1)} ${y.toFixed(1)}`)).join(' ');
-  const area = `${d} L ${w} ${h} L 0 ${h} Z`;
+  const area = `${d} L ${vw} ${h} L 0 ${h} Z`;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} preserveAspectRatio="none">
+    <svg
+      viewBox={`0 0 ${vw} ${h}`}
+      width={fluid ? '100%' : w}
+      height={h}
+      preserveAspectRatio="none"
+      style={fluid ? { display: 'block' } : undefined}
+    >
       {fill && <path d={area} fill={stroke} opacity="0.08" />}
       <path d={d} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -45,30 +53,28 @@ export function Radar({ axes, values, size = 260 }: { axes: string[]; values: nu
       })}
       <polygon points={polyPts} fill="var(--t-7)" fillOpacity="0.18" stroke="var(--t-7)" strokeWidth="1.5" />
       {axes.map((ax, i) => {
-        const [x, y] = point(1.18, i);
-        return <text key={ax} x={x} y={y} fontSize="9.5" fontFamily="var(--font-mono)"
-          fill="var(--ink-3)" textAnchor="middle" dominantBaseline="middle" letterSpacing="0.08em">
+        const [x, y] = point(1.22, i);
+        return <text key={ax} x={x} y={y} fontSize="11" fontFamily="var(--font-mono)"
+          fill="var(--ink-2)" textAnchor="middle" dominantBaseline="middle" letterSpacing="0.06em">
           {ax.toUpperCase()}
         </text>;
       })}
       {values.map((v, i) => {
         const [x, y] = point(v, i);
-        return <circle key={i} cx={x} cy={y} r="2.5" fill="var(--t-7)" />;
+        return <circle key={i} cx={x} cy={y} r="3" fill="var(--t-7)" />;
       })}
     </svg>
   );
 }
 
-// Heat cell
+// Heat cell — value shown only in tooltip, not inside the cell
 export function HeatCell({ value, tooltip }: { value: number; tooltip?: string }) {
   const score = Math.round(value * 100);
   return (
     <div className="bi-hoverable" style={{
-      aspectRatio: '1 / 1', borderRadius: 6, background: tempVar(score),
-      opacity: 0.92, display: 'grid', placeItems: 'center',
-      fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--bg)',
-      fontWeight: 600, letterSpacing: '0.04em',
-    }} title={tooltip}>{score}</div>
+      aspectRatio: '1 / 1', borderRadius: 4, background: tempVar(score),
+      opacity: 0.88, display: 'block',
+    }} title={tooltip} />
   );
 }
 

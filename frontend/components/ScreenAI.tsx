@@ -9,6 +9,7 @@ interface Props {
   palette: Palette;
   onCyclePalette: () => void;
   onNavigate: (s: string) => void;
+  onOpenTweaks?: () => void;
 }
 
 const INSIGHTS = [
@@ -20,7 +21,7 @@ const INSIGHTS = [
 
 const VERB_SCORE: Record<string, number> = { SELL: 90, CAUTION: 70, WATCH: 50, HOLD: 30, BUY: 10 };
 
-export default function ScreenAI({ data, palette, onCyclePalette, onNavigate }: Props) {
+export default function ScreenAI({ data, palette, onCyclePalette, onNavigate, onOpenTweaks }: Props) {
   const score = data?.composite_score ?? 72;
   const tier = riskTier(score);
   const cats = data?.categories ?? [];
@@ -33,14 +34,14 @@ export default function ScreenAI({ data, palette, onCyclePalette, onNavigate }: 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)' }}>
-      <Topbar active="ai" palette={palette} onCyclePalette={onCyclePalette} onNavigate={onNavigate} />
+      <Topbar active="ai" palette={palette} onCyclePalette={onCyclePalette} onNavigate={onNavigate} onOpenTweaks={onOpenTweaks} />
       <div style={{ flex: 1, padding: 'var(--pad-screen)', display: 'grid', gridTemplateColumns: '1fr 420px', gap: 'var(--gap-grid)', minHeight: 0, overflow: 'hidden' }}>
 
         {/* LEFT — headline + feed */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)', minHeight: 0 }}>
           <div>
             <div className="bi-eyebrow">AI INSIGHTS · {new Date().toDateString().toUpperCase()}</div>
-            <div style={{ fontSize: 36, fontWeight: 300, letterSpacing: '-0.025em', marginTop: 8, lineHeight: 1.1, color: 'var(--ink-1)' }}>
+            <div style={{ fontSize: 34, fontWeight: 300, letterSpacing: '-0.025em', marginTop: 8, lineHeight: 1.15, color: 'var(--ink-1)' }}>
               The market shows
               <span style={{ color: tier.tone, fontWeight: 500 }}> {tier.tier.toLowerCase()} </span>
               risk across multiple dimensions.
@@ -51,10 +52,10 @@ export default function ScreenAI({ data, palette, onCyclePalette, onNavigate }: 
             {INSIGHTS.map((ins, i) => {
               const t = riskTier(VERB_SCORE[ins.verb] ?? 50);
               return (
-                <div key={i} className="bi-card bi-hoverable" onClick={() => onNavigate(`methodology:${ins.categoryId}`)} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 90px', gap: 18, alignItems: 'center', cursor: 'pointer' }}>
-                  <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.16em' }}>{ins.tag}</div>
-                  <div style={{ fontSize: 15, color: 'var(--ink-1)', lineHeight: 1.4 }}>{ins.text}</div>
-                  <div className="mono" style={{ fontSize: 11, letterSpacing: '0.18em', fontWeight: 600, color: t.tone, textAlign: 'right' }}>{ins.verb}</div>
+                <div key={i} className="bi-card bi-hoverable" onClick={() => onNavigate(`methodology:${ins.categoryId}`)} style={{ display: 'grid', gridTemplateColumns: '130px 1fr 90px', gap: 18, alignItems: 'center', cursor: 'pointer' }}>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.10em' }}>{ins.tag}</div>
+                  <div style={{ fontSize: 15, color: 'var(--ink-1)', lineHeight: 1.5 }}>{ins.text}</div>
+                  <div className="mono" style={{ fontSize: 12, letterSpacing: '0.12em', fontWeight: 600, color: t.tone, textAlign: 'right' }}>{ins.verb}</div>
                 </div>
               );
             })}
@@ -66,7 +67,7 @@ export default function ScreenAI({ data, palette, onCyclePalette, onNavigate }: 
           <div className="bi-card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>RISK FOOTPRINT</div>
-              <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.12em' }}>VS 50Y AVG</span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.08em' }}>VS 50Y AVG</span>
             </div>
             <div style={{ display: 'grid', placeItems: 'center' }}>
               <Radar axes={axes} values={radarVals} size={280} />
@@ -81,13 +82,13 @@ export default function ScreenAI({ data, palette, onCyclePalette, onNavigate }: 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
               <div className="bi-bignum" style={{ fontSize: 64, color: 'var(--ink-1)' }}>{score}</div>
               <div>
-                <div className="mono" style={{ fontSize: 11, color: tier.tone, fontWeight: 600, letterSpacing: '0.18em' }}>{tier.tier}</div>
-                <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.1em', marginTop: 3 }}>COMPOSITE SCORE</div>
+                <div className="mono" style={{ fontSize: 12, color: tier.tone, fontWeight: 600, letterSpacing: '0.12em' }}>{tier.tier}</div>
+                <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.06em', marginTop: 3 }}>COMPOSITE SCORE</div>
               </div>
             </div>
             <div style={{ marginTop: 14, padding: '12px 14px', background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 8 }}>
-              <div className="bi-eyebrow" style={{ fontSize: 9 }}>RECOMMENDED ACTION</div>
-              <div style={{ fontSize: 13, color: 'var(--ink-1)', marginTop: 5, lineHeight: 1.4 }}>
+              <div className="bi-eyebrow" style={{ marginBottom: 6 }}>RECOMMENDED ACTION</div>
+              <div style={{ fontSize: 13, color: 'var(--ink-1)', lineHeight: 1.5 }}>
                 {tier.tier === 'BUBBLE' || tier.tier === 'HIGH'
                   ? 'Trim concentrated growth exposure. Rotate 15–20% into short-duration sovereign.'
                   : tier.tier === 'ELEVATED'
@@ -101,4 +102,3 @@ export default function ScreenAI({ data, palette, onCyclePalette, onNavigate }: 
     </div>
   );
 }
-

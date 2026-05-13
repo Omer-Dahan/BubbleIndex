@@ -18,9 +18,10 @@ interface Props {
   palette: Palette;
   onCyclePalette: () => void;
   onNavigate: (s: string) => void;
+  onOpenTweaks?: () => void;
 }
 
-export default function ScreenIndicators({ data, palette, onCyclePalette, onNavigate }: Props) {
+export default function ScreenIndicators({ data, palette, onCyclePalette, onNavigate, onOpenTweaks }: Props) {
   const months = 24;
   const rng = (s: number) => { let x = s; return () => (x = (x * 9301 + 49297) % 233280) / 233280; };
 
@@ -36,7 +37,7 @@ export default function ScreenIndicators({ data, palette, onCyclePalette, onNavi
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)' }}>
-      <Topbar active="indicators" palette={palette} onCyclePalette={onCyclePalette} onNavigate={onNavigate} />
+      <Topbar active="indicators" palette={palette} onCyclePalette={onCyclePalette} onNavigate={onNavigate} onOpenTweaks={onOpenTweaks} />
       <div style={{ flex: 1, padding: 'var(--pad-screen)', display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)', minHeight: 0 }}>
 
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
@@ -47,30 +48,32 @@ export default function ScreenIndicators({ data, palette, onCyclePalette, onNavi
             </div>
           </div>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-            <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.14em' }}>SCALE</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)' }}>STABLE</span>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.08em' }}>SCALE</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--ink-4)' }}>STABLE</span>
               <div style={{ width: 180, height: 8, borderRadius: 4, background: 'linear-gradient(to right, var(--t-1), var(--t-3), var(--t-5), var(--t-7), var(--t-9))' }} />
-              <span className="mono" style={{ fontSize: 10, color: 'var(--ink-4)' }}>BUBBLE</span>
+              <span className="mono" style={{ fontSize: 11, color: 'var(--ink-4)' }}>BUBBLE</span>
             </div>
           </div>
         </div>
 
         <div className="bi-card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '180px 1fr 120px', gap: 16, minHeight: 0 }}>
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '180px 1fr 130px', gap: 16, minHeight: 0 }}>
+
             {/* Row labels */}
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', paddingTop: 18 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', paddingTop: 26 }}>
               {INDICATORS.map((ind) => (
                 <div key={ind.key} className="bi-hoverable" onClick={() => onNavigate(`methodology:${ind.key}`)} style={{ cursor: 'pointer', borderRadius: 6, padding: '4px 6px' }}>
                   <div style={{ fontSize: 13, color: 'var(--ink-1)', fontWeight: 500 }}>{ind.name}</div>
-                  <div className="mono" style={{ fontSize: 9, color: 'var(--ink-4)', marginTop: 2, letterSpacing: '0.06em' }}>{ind.desc.toUpperCase()}</div>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 3, letterSpacing: '0.04em' }}>{ind.desc.toUpperCase()}</div>
                 </div>
               ))}
             </div>
 
             {/* Heatmap grid */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div className="mono" style={{ display: 'grid', gridTemplateColumns: `repeat(${months}, 1fr)`, gap: 3, fontSize: 8.5, color: 'var(--ink-4)', marginBottom: 6, letterSpacing: '0.04em' }}>
+              {/* Column headers — show every 3rd month label */}
+              <div className="mono" style={{ display: 'grid', gridTemplateColumns: `repeat(${months}, 1fr)`, gap: 3, fontSize: 10, color: 'var(--ink-4)', marginBottom: 6, letterSpacing: '0.04em' }}>
                 {Array.from({ length: months }).map((_, j) => (
                   <div key={j} style={{ textAlign: 'center' }}>{j % 3 === 0 ? `M${months - j}` : ''}</div>
                 ))}
@@ -83,7 +86,7 @@ export default function ScreenIndicators({ data, palette, onCyclePalette, onNavi
             </div>
 
             {/* Current values */}
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', borderLeft: '1px solid var(--hairline)', paddingLeft: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', borderLeft: '1px solid var(--hairline)', paddingLeft: 16 }}>
               {INDICATORS.map((ind, i) => {
                 const last = grid[i][grid[i].length - 1];
                 const prev = grid[i][Math.max(0, grid[i].length - 7)];
@@ -93,7 +96,7 @@ export default function ScreenIndicators({ data, palette, onCyclePalette, onNavi
                     <div className="mono tnum" style={{ fontSize: 26, color: tempVar(last * 100), fontWeight: 500, lineHeight: 1 }}>{Math.round(last * 100)}</div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginTop: 4 }}>
                       <Delta value={delta} suffix="pt" />
-                      <span className="mono" style={{ fontSize: 9, color: 'var(--ink-4)', letterSpacing: '0.1em' }}>7D</span>
+                      <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.06em' }}>7D</span>
                     </div>
                   </div>
                 );
@@ -105,4 +108,3 @@ export default function ScreenIndicators({ data, palette, onCyclePalette, onNavi
     </div>
   );
 }
-

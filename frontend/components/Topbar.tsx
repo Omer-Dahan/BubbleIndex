@@ -6,6 +6,7 @@ interface Props {
   palette: Palette;
   onCyclePalette: () => void;
   onNavigate: (screen: string) => void;
+  onOpenTweaks?: () => void;
 }
 
 const NAV = [
@@ -17,7 +18,7 @@ const NAV = [
   ['methodology', 'Methodology'],
 ] as const;
 
-export default function Topbar({ active, palette, onCyclePalette, onNavigate }: Props) {
+export default function Topbar({ active, palette, onCyclePalette, onNavigate, onOpenTweaks }: Props) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 24,
@@ -28,8 +29,9 @@ export default function Topbar({ active, palette, onCyclePalette, onNavigate }: 
       {/* Brand */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
-        fontFamily: 'var(--font-mono)', fontSize: 13,
+        fontFamily: 'var(--font-mono)', fontSize: 15,
         letterSpacing: '0.08em', fontWeight: 500, color: 'var(--ink-1)',
+        flexShrink: 0,
       }}>
         <span style={{
           width: 10, height: 10, borderRadius: 2,
@@ -43,9 +45,10 @@ export default function Topbar({ active, palette, onCyclePalette, onNavigate }: 
       <div style={{ display: 'flex', gap: 4, marginLeft: 16 }}>
         {NAV.map(([id, label]) => (
           <button key={id} onClick={() => onNavigate(id)} style={{
-            fontSize: 13, color: id === active ? 'var(--ink-1)' : 'var(--ink-3)',
-            padding: '6px 10px', borderRadius: 6, cursor: 'pointer', border: 'none',
+            fontSize: 14, color: id === active ? 'var(--ink-1)' : 'var(--ink-3)',
+            padding: '7px 12px', borderRadius: 6, cursor: 'pointer', border: 'none',
             background: id === active ? 'var(--panel-3)' : 'transparent',
+            fontFamily: 'var(--font-sans)',
           }}>{label}</button>
         ))}
       </div>
@@ -54,24 +57,24 @@ export default function Topbar({ active, palette, onCyclePalette, onNavigate }: 
 
       {/* Search */}
       <div style={{
-        width: 280, height: 32, border: '1px solid var(--hairline)', borderRadius: 8,
+        width: 280, height: 34, border: '1px solid var(--hairline)', borderRadius: 8,
         background: 'var(--panel-2)', display: 'flex', alignItems: 'center',
-        padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 12,
-        color: 'var(--ink-4)', gap: 8,
+        padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 13,
+        color: 'var(--ink-4)', gap: 8, flexShrink: 0,
       }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>
         </svg>
         Search ticker, index, era…
-        <span style={{ marginLeft: 'auto', fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--panel-3)', color: 'var(--ink-3)', border: '1px solid var(--hairline)' }}>⌘K</span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 6px', borderRadius: 4, background: 'var(--panel-3)', color: 'var(--ink-3)', border: '1px solid var(--hairline)' }}>⌘K</span>
       </div>
 
       {/* Palette switcher */}
       <button onClick={onCyclePalette} title={`Palette · ${palette}`} style={{
-        height: 32, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 6,
+        height: 34, padding: '0 12px', display: 'flex', alignItems: 'center', gap: 6,
         border: '1px solid var(--hairline)', borderRadius: 8, background: 'var(--panel-2)',
-        color: 'var(--ink-2)', fontFamily: 'var(--font-mono)', fontSize: 10,
-        letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer',
+        color: 'var(--ink-2)', fontFamily: 'var(--font-mono)', fontSize: 11,
+        letterSpacing: '0.10em', textTransform: 'uppercase', cursor: 'pointer', flexShrink: 0,
       }}>
         <span style={{ display: 'inline-flex', gap: 2 }}>
           {(['var(--t-1)', 'var(--t-5)', 'var(--t-9)'] as string[]).map((c, i) => (
@@ -81,18 +84,20 @@ export default function Topbar({ active, palette, onCyclePalette, onNavigate }: 
         {palette}
       </button>
 
-      {/* Settings icon */}
-      <div style={{
-        width: 32, height: 32, display: 'grid', placeItems: 'center',
-        border: '1px solid var(--hairline)', background: 'var(--panel-2)',
-        borderRadius: 8, color: 'var(--ink-2)',
-      }}>
+      {/* Settings icon — opens Tweaks panel */}
+      <button
+        onClick={onOpenTweaks}
+        title="Tweaks"
+        style={{
+          width: 34, height: 34, display: 'grid', placeItems: 'center',
+          border: '1px solid var(--hairline)', background: 'var(--panel-2)',
+          borderRadius: 8, color: 'var(--ink-2)', cursor: onOpenTweaks ? 'pointer' : 'default',
+        }}
+      >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
           <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>
         </svg>
-      </div>
-
-      <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--panel-3)', border: '1px solid var(--hairline)' }} />
+      </button>
     </div>
   );
 }

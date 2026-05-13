@@ -10,6 +10,7 @@ interface Props {
   onCyclePalette: () => void;
   onNavigate: (s: string) => void;
   focusCategory?: string;
+  onOpenTweaks?: () => void;
 }
 
 const STATIC_CATEGORIES = [
@@ -164,7 +165,7 @@ function CategoryCard({
   );
 }
 
-export default function ScreenMethodology({ data, palette, onCyclePalette, onNavigate, focusCategory }: Props) {
+export default function ScreenMethodology({ data, palette, onCyclePalette, onNavigate, focusCategory, onOpenTweaks }: Props) {
   const cats = mergeWithLive(data?.categories);
   const compositeScore = data?.composite_score ?? 0;
   const activeCats = cats.filter((c) => c.weight > 0);
@@ -181,7 +182,7 @@ export default function ScreenMethodology({ data, palette, onCyclePalette, onNav
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)' }}>
-      <Topbar active="methodology" palette={palette} onCyclePalette={onCyclePalette} onNavigate={onNavigate} />
+      <Topbar active="methodology" palette={palette} onCyclePalette={onCyclePalette} onNavigate={onNavigate} onOpenTweaks={onOpenTweaks} />
       <div style={{ flex: 1, padding: 'var(--pad-screen)', display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)' }}>
 
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24 }}>
