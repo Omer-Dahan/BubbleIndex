@@ -23,11 +23,11 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 logger = logging.getLogger(__name__)
 
 PERCENTILE_SERIES = [
-    "DDDM01USA156NWDB", "sp500_pe",
+    "DDDM01USA156NWDB", "shiller_cape", "sp500_pe", "sp500_ps",
     "yield_curve_spread",
-    "FEDFUNDS", "unemp_trend",
-    "VIXCLS", "BAMLH0A0HYM2",
-    "vix_trend", "top10_concentration",
+    "FEDFUNDS", "unemp_trend", "cpi_yoy",
+    "VIXCLS", "BAMLH0A0HYM2", "margin_debt_yoy",
+    "vix_trend", "ipo_volume_yoy", "top10_concentration",
 ]
 
 
