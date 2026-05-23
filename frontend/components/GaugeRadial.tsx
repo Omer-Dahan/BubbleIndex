@@ -154,8 +154,6 @@ export default function GaugeRadial({ score, size = 360 }: Props) {
           transition={{ type: 'spring', stiffness: 55, damping: 18 }}
           filter={`url(#${filterGlow})`}
         />
-        {/* Hub circle at rotation center */}
-        <circle r={size * 0.022} fill="var(--panel-3)" stroke="var(--ink-3)" strokeWidth="1.5" />
       </g>
 
       {/* Animated score readout */}
