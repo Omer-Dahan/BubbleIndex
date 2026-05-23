@@ -160,3 +160,20 @@ html, body {
   font-variant-numeric: tabular-nums;
   line-height: 0.95;
 }
+
+.bi-card-tight {
+  background: var(--panel);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: calc(var(--pad-card) * 0.5);
+  position: relative;
+}
+
+.bi-card-title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  font-weight: 500;
+}

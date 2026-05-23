@@ -49,14 +49,18 @@ class HistoricalBackfillEngine:
         self.session = session
         self.normalizer = PercentileNormalizer(session)
 
-    def compute_snapshot(self, reference_date: date) -> dict | None:
+    def compute_snapshot(self, reference_date: date, force: bool = False) -> dict | None:
         existing = (
             self.session.query(RiskSnapshot)
             .filter(RiskSnapshot.snapshot_date == reference_date)
             .first()
         )
         if existing:
-            return None
+            if not force:
+                return None
+            # Delete and recompute when forced
+            self.session.delete(existing)
+            self.session.commit()
 
         warnings: list[str] = []
         raw = self._compute_raw_indicators(reference_date, warnings)

@@ -17,6 +17,7 @@ from app.scoring.weights import ALL_INDICATOR_NAMES
 from app.scoring.engine import ScoringEngine
 from app.data.loaders.historical_bootstrap import HistoricalBootstrapper
 from app.data.loaders.daily_sync import run_daily_sync
+from app.data.loaders.concentration_seed import seed_concentration_history
 from app.api.v1.router import router as v1_router
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -58,6 +59,12 @@ async def lifespan(app: FastAPI):
         bootstrapper.run_incremental_if_stale(staleness_days=2)
     except Exception as e:
         logger.warning("Incremental sync warning: %s", e)
+
+    # Seed historical concentration data (no-op if already seeded)
+    try:
+        seed_concentration_history(session)
+    except Exception as e:
+        logger.warning("Concentration seed warning: %s", e)
 
     # Warm percentile normalizer
     normalizer = PercentileNormalizer(session)

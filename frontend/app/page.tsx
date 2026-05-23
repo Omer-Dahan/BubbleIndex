@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import ScreenHome from '@/components/ScreenHome';
 import ScreenHistorical from '@/components/ScreenHistorical';
 import ScreenIndicators from '@/components/ScreenIndicators';
@@ -114,13 +115,23 @@ export default function App() {
       )}
 
       {/* Screens */}
-      {screen === 'home'        && <ScreenHome       {...screenProps} gaugeKind={gaugeKind} snapshots={snapshots} />}
-      {screen === 'historical'  && <ScreenHistorical {...screenProps} snapshots={snapshots} />}
-      {screen === 'indicators'  && <ScreenIndicators {...screenProps} />}
-      {screen === 'replay'      && <ScreenReplay     {...screenProps} />}
-      {screen === 'ai'          && <ScreenAI         {...screenProps} />}
-      {screen === 'methodology' && <ScreenMethodology {...screenProps} focusCategory={focusCategory} />}
-      {screen === 'footer'      && <ScreenFooter palette={palette} onCyclePalette={cyclePalette} onNavigate={handleNavigate} onOpenTweaks={openTweaks} />}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={screen}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
+        >
+          {screen === 'home'        && <ScreenHome       {...screenProps} gaugeKind={gaugeKind} snapshots={snapshots} />}
+          {screen === 'historical'  && <ScreenHistorical {...screenProps} snapshots={snapshots} />}
+          {screen === 'indicators'  && <ScreenIndicators {...screenProps} snapshots={snapshots} />}
+          {screen === 'replay'      && <ScreenReplay     {...screenProps} snapshots={snapshots} />}
+          {screen === 'ai'          && <ScreenAI         {...screenProps} />}
+          {screen === 'methodology' && <ScreenMethodology {...screenProps} focusCategory={focusCategory} />}
+          {screen === 'footer'      && <ScreenFooter palette={palette} onCyclePalette={cyclePalette} onNavigate={handleNavigate} onOpenTweaks={openTweaks} />}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Tweaks panel */}
       <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9990 }}>

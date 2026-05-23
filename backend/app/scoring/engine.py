@@ -358,6 +358,34 @@ class ScoringEngine:
                 logger.warning("Failed to store derived indicators: %s", e)
                 self.session.rollback()
 
+    # Raw indicator series IDs stored by _store_derived (series_id == ind_id in raw dict)
+    _RAW_SERIES_IDS = [
+        "buffett_indicator", "shiller_cape", "sp500_pe", "sp500_ps",
+        "yield_curve_spread", "fed_funds_level", "unemployment_trend",
+        "cpi_yoy", "vix_level", "hy_spread", "margin_debt_yoy",
+        "vix_trend", "ipo_volume_yoy", "top10_concentration",
+    ]
+
+    def _load_raw_values_for_date(self, snap_date) -> dict[str, float]:
+        """Load stored raw indicator values from indicator_series for a given snapshot date."""
+        from datetime import timedelta
+        lookback = snap_date - timedelta(days=7)
+        rows = (
+            self.session.query(IndicatorSeries.series_id, IndicatorSeries.value)
+            .filter(
+                IndicatorSeries.series_id.in_(self._RAW_SERIES_IDS),
+                IndicatorSeries.date >= lookback,
+                IndicatorSeries.date <= snap_date,
+            )
+            .order_by(IndicatorSeries.date.desc())
+            .all()
+        )
+        result: dict[str, float] = {}
+        for series_id, value in rows:
+            if series_id not in result:
+                result[series_id] = float(value)
+        return result
+
     def _snapshot_to_dict(self, snap: RiskSnapshot) -> dict:
         _, verb = score_to_label(snap.composite_score)
         vec = json.loads(snap.indicator_vector or "{}")
@@ -368,15 +396,18 @@ class ScoringEngine:
             "sentiment":       snap.sentiment_score or 50.0,
             "concentration":   snap.concentration_score or 50.0,
         }
+        # Load raw values from indicator_series DB (stored by _store_derived on fresh compute)
+        raw_vals = self._load_raw_values_for_date(snap.snapshot_date)
         categories_raw = []
         for cat_id, cat in WEIGHT_CONFIG.items():
             inds = []
             for ind_id, ind_cfg in cat["indicators"].items():
                 norm_score = vec.get(ind_id)
+                raw_val = raw_vals.get(ind_id)
                 inds.append({
                     "name": ind_id,
                     "display_name": ind_cfg["display_name"],
-                    "raw_value": None,
+                    "raw_value": round(raw_val, 4) if raw_val is not None else None,
                     "raw_unit": ind_cfg["unit"],
                     "normalized_score": round(norm_score, 1) if norm_score is not None else 50.0,
                     "is_imputed": norm_score is None,

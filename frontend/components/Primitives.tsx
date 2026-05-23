@@ -25,7 +25,7 @@ export function Sparkline({ data, w = 220, h = 56, stroke = 'var(--ink-2)', fill
       style={fluid ? { display: 'block' } : undefined}
     >
       {fill && <path d={area} fill={stroke} opacity="0.08" />}
-      <path d={d} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }

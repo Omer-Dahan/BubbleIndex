@@ -37,6 +37,7 @@ Thumbs.db
 *.db
 backend/data/*.db
 backend/data/*.sqlite3
+backend/data/cache/
 
 # IDE / Editor
 .vscode/

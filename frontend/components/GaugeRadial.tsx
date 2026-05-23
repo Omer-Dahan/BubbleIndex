@@ -1,7 +1,40 @@
 'use client';
+import { useEffect, useState } from 'react';
+import { motion, animate } from 'framer-motion';
 import { riskTier, scaleTone } from '@/lib/utils';
 
 interface Props { score: number; size?: number; }
+
+function AnimatedScore({
+  score, cx, cy, size, tone,
+}: { score: number; cx: number; cy: number; size: number; tone: string }) {
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    const controls = animate(0, score, {
+      duration: 1.4,
+      ease: [0.25, 0.1, 0.25, 1],
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    });
+    return () => controls.stop();
+  }, [score]);
+
+  return (
+    <>
+      <text
+        x={cx} y={cy + size * 0.30}
+        fill={tone}
+        fontSize={size * 0.22} fontWeight="200"
+        fontFamily="'Barlow Condensed', 'Inter', sans-serif"
+        textAnchor="middle"
+        style={{
+          letterSpacing: '0.01em',
+          filter: score >= 75 ? `drop-shadow(0 0 ${size * 0.04}px ${tone})` : 'none',
+        }}
+      >{display}</text>
+    </>
+  );
+}
 
 export default function GaugeRadial({ score, size = 360 }: Props) {
   const cx = size / 2, cy = size * 0.56;
@@ -24,38 +57,43 @@ export default function GaugeRadial({ score, size = 360 }: Props) {
 
   const majors = [0, 25, 50, 75, 100];
   const uid = `g${(Math.abs(score * 1000 + size)) | 0}`;
-  const gradActive = `grad-active-${uid}`;
+  const gradActive   = `grad-active-${uid}`;
   const gradInactive = `grad-inactive-${uid}`;
-  const gradNeedle = `grad-needle-${uid}`;
-  const filterGlow = `glow-${uid}`;
+  const gradNeedle   = `grad-needle-${uid}`;
+  const filterGlow   = `glow-${uid}`;
 
   const [gx1, gy1] = polar(startA, r);
   const [gx2, gy2] = polar(endA, r);
   const tone = scaleTone(score);
+
+  // Needle geometry: drawn pointing right (+x) from (0,0), translated to center via SVG <g>
+  const needleLen  = r - arcWidth * 0.95;
+  const needleBase = size * 0.025;
+  const needleTip  = size * 0.014;
+  const needlePoints = `0,${-needleBase} ${needleLen},${-needleTip} ${needleLen},${needleTip} 0,${needleBase}`;
 
   return (
     <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
       <defs>
         <linearGradient id={gradActive} gradientUnits="userSpaceOnUse"
           x1={gx1} y1={gy1} x2={gx2} y2={gy2}>
-          <stop offset="0" stopColor="var(--t-1)" />
+          <stop offset="0"    stopColor="var(--t-1)" />
           <stop offset="0.25" stopColor="var(--t-3)" />
           <stop offset="0.50" stopColor="var(--t-5)" />
           <stop offset="0.70" stopColor="var(--t-7)" />
           <stop offset="0.85" stopColor="var(--t-8)" />
-          <stop offset="1" stopColor="var(--t-9)" />
+          <stop offset="1"    stopColor="var(--t-9)" />
         </linearGradient>
         <linearGradient id={gradInactive} x1="0" x2="1" y1="0" y2="1">
           <stop offset="0" stopColor="color-mix(in srgb, var(--ink-1) 14%, var(--panel))" />
           <stop offset="1" stopColor="var(--panel-2)" />
         </linearGradient>
+        {/* Gradient along needle pointing right from (0,0) in local translated space */}
         <linearGradient id={gradNeedle} gradientUnits="userSpaceOnUse"
-          x1={cx} y1={cy}
-          x2={cx + (r - arcWidth * 0.55) * Math.cos((valueA * Math.PI) / 180)}
-          y2={cy + (r - arcWidth * 0.55) * Math.sin((valueA * Math.PI) / 180)}>
-          <stop offset="0" stopColor="var(--ink-1)" stopOpacity="0" />
-          <stop offset="0.55" stopColor="var(--ink-1)" stopOpacity="0.55" />
-          <stop offset="1" stopColor="var(--ink-1)" stopOpacity="1" />
+          x1="0" y1="0" x2={needleLen} y2="0">
+          <stop offset="0"    stopColor="var(--ink-1)" stopOpacity="0.2" />
+          <stop offset="0.25" stopColor="var(--ink-1)" stopOpacity="0.65" />
+          <stop offset="1"    stopColor="var(--ink-1)" stopOpacity="1" />
         </linearGradient>
         <filter id={filterGlow} x="-30%" y="-30%" width="160%" height="160%">
           <feGaussianBlur stdDeviation={size * (score >= 75 ? 0.028 : 0.018)} result="blur" />
@@ -66,19 +104,27 @@ export default function GaugeRadial({ score, size = 360 }: Props) {
         </filter>
       </defs>
 
-      {/* inactive backing arc */}
+      {/* Inactive backing arc */}
       <path d={arcPath(startA, endA, r)}
         fill="none" stroke={`url(#${gradInactive})`}
         strokeWidth={arcWidth} strokeLinecap="round" />
 
-      {/* active arc */}
-      {score > 0.5 && (
-        <path d={arcPath(startA, valueA, r)}
-          fill="none" stroke={`url(#${gradActive})`}
-          strokeWidth={arcWidth} strokeLinecap="round" />
-      )}
+      {/* Active arc — animates its length from 0 to score/100 */}
+      <motion.path
+        d={arcPath(startA, endA, r)}
+        fill="none"
+        stroke={`url(#${gradActive})`}
+        strokeWidth={arcWidth}
+        strokeLinecap="round"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: score / 100, opacity: score > 0.5 ? 1 : 0 }}
+        transition={{
+          pathLength: { type: 'spring', stiffness: 48, damping: 20, restDelta: 0.001 },
+          opacity:    { duration: 0.3 },
+        }}
+      />
 
-      {/* scale labels */}
+      {/* Scale labels */}
       {majors.map((m) => {
         const inset = m === 0 ? 2.5 : m === 100 ? -2.5 : 0;
         const a = startA + (m / 100) * (endA - startA) + inset;
@@ -96,35 +142,25 @@ export default function GaugeRadial({ score, size = 360 }: Props) {
         );
       })}
 
-      {/* needle */}
-      {(() => {
-        const len = r - arcWidth * 0.95;
-        const baseW = size * 0.025;
-        const tipW = size * 0.014;
-        const a = (valueA * Math.PI) / 180;
-        const perp = a + Math.PI / 2;
-        const [tx, ty] = [cx + len * Math.cos(a), cy + len * Math.sin(a)];
-        const [b1x, b1y] = [cx + baseW * Math.cos(perp), cy + baseW * Math.sin(perp)];
-        const [b2x, b2y] = [cx - baseW * Math.cos(perp), cy - baseW * Math.sin(perp)];
-        const [t1x, t1y] = [tx + tipW * Math.cos(perp), ty + tipW * Math.sin(perp)];
-        const [t2x, t2y] = [tx - tipW * Math.cos(perp), ty - tipW * Math.sin(perp)];
-        return (
-          <g filter={`url(#${filterGlow})`}>
-            <path d={`M ${b1x} ${b1y} L ${t1x} ${t1y} L ${t2x} ${t2y} L ${b2x} ${b2y} Z`}
-              fill={`url(#${gradNeedle})`} strokeLinejoin="round" />
-          </g>
-        );
-      })()}
+      {/* Needle — SVG translate to center, then CSS rotate around local (0,0) */}
+      <g transform={`translate(${cx} ${cy})`}>
+        <motion.polygon
+          points={needlePoints}
+          fill={`url(#${gradNeedle})`}
+          strokeLinejoin="round"
+          style={{ originX: 0, originY: 0.5 }}
+          initial={{ rotate: startA }}
+          animate={{ rotate: valueA }}
+          transition={{ type: 'spring', stiffness: 55, damping: 18 }}
+          filter={`url(#${filterGlow})`}
+        />
+        {/* Hub circle at rotation center */}
+        <circle r={size * 0.022} fill="var(--panel-3)" stroke="var(--ink-3)" strokeWidth="1.5" />
+      </g>
 
-      {/* score readout */}
-      <text x={cx} y={cy + size * 0.30}
-        fill={tone}
-        fontSize={size * 0.22} fontWeight="200"
-        fontFamily="'Barlow Condensed', 'Inter', sans-serif"
-        textAnchor="middle"
-        style={{ letterSpacing: '0.01em', filter: score >= 75 ? `drop-shadow(0 0 ${size * 0.04}px ${tone})` : 'none' }}>
-        {score}
-      </text>
+      {/* Animated score readout */}
+      <AnimatedScore score={score} cx={cx} cy={cy} size={size} tone={tone} />
+
       <text x={cx} y={cy + size * 0.355}
         fill={tone} fontSize={size * 0.032} fontWeight="600"
         letterSpacing="0.24em"
