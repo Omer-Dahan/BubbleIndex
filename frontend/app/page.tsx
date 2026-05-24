@@ -46,6 +46,26 @@ export default function App() {
 
   // Fetch live data
   useEffect(() => {
+    // 1. Load from cache immediately on client-side mount to prevent visual jumps
+    if (typeof window !== 'undefined') {
+      const cachedData = localStorage.getItem('bubble_index_latest_data');
+      const cachedSnaps = localStorage.getItem('bubble_index_latest_snapshots');
+      if (cachedData) {
+        try {
+          setData(JSON.parse(cachedData));
+        } catch (e) {
+          console.error('Error parsing cached data', e);
+        }
+      }
+      if (cachedSnaps) {
+        try {
+          setSnapshots(JSON.parse(cachedSnaps));
+        } catch (e) {
+          console.error('Error parsing cached snapshots', e);
+        }
+      }
+    }
+
     setLoading(true);
     const scorePromise = api.getLatestScore()
       .catch(() => api.getRiskScore());
@@ -55,6 +75,11 @@ export default function App() {
       .then(([d, snaps]) => {
         setData(d);
         setSnapshots(snaps);
+        // 2. Save fetched data to cache
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('bubble_index_latest_data', JSON.stringify(d));
+          localStorage.setItem('bubble_index_latest_snapshots', JSON.stringify(snaps));
+        }
         setError(null);
       })
       .catch(e => setError(e.message))
@@ -66,6 +91,9 @@ export default function App() {
     try {
       const d = await api.refreshScore();
       setData(d);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('bubble_index_latest_data', JSON.stringify(d));
+      }
       setError(null);
     } catch (e: any) {
       setError(e.message);

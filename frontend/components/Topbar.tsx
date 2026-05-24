@@ -55,19 +55,6 @@ export default function Topbar({ active, palette, onCyclePalette, onNavigate, on
 
       <div style={{ flex: 1 }} />
 
-      {/* Search */}
-      <div style={{
-        width: 280, height: 34, border: '1px solid var(--hairline)', borderRadius: 8,
-        background: 'var(--panel-2)', display: 'flex', alignItems: 'center',
-        padding: '0 12px', fontFamily: 'var(--font-mono)', fontSize: 13,
-        color: 'var(--ink-4)', gap: 8, flexShrink: 0,
-      }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>
-        </svg>
-        Search ticker, index, era…
-        <span style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 6px', borderRadius: 4, background: 'var(--panel-3)', color: 'var(--ink-3)', border: '1px solid var(--hairline)' }}>⌘K</span>
-      </div>
 
       {/* Palette switcher */}
       <button onClick={onCyclePalette} title={`Palette · ${palette}`} style={{

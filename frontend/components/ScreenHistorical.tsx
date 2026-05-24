@@ -1,9 +1,20 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Topbar from './Topbar';
 import { tempVar } from '@/lib/utils';
 import { riskTier } from '@/lib/utils';
 import type { RiskScoreResponse, SnapshotSummary, Palette } from '@/lib/types';
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 16 },
+  visible: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const, delay: i * 0.07 } }),
+};
+
+const fadeRight = {
+  hidden: { opacity: 0, x: 24 },
+  visible: (i = 0) => ({ opacity: 1, x: 0, transition: { duration: 0.4, ease: 'easeOut' as const, delay: i * 0.09 } }),
+};
 
 interface Props {
   data: RiskScoreResponse | null;
@@ -33,6 +44,62 @@ const CRISIS_MARKERS = [
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+const CRISIS_DETAILS: Record<string, {
+  name: string;
+  period: string;
+  peak: string;
+  drawdown: string;
+  recovery: string;
+  why: string;
+  summary: string;
+}> = {
+  "1929_crash": {
+    name: "1929 Wall St. Crash",
+    period: "1929 – 1954",
+    peak: "89.0",
+    drawdown: "-89.0%",
+    recovery: "25 Years (Nominal price recovery for DJIA & S&P predecessors)",
+    why: "A massive speculative bubble fueled by extreme margin debt and unregulated credit expansion during the 'Roaring Twenties'. When the bubble burst, panic selling triggered a complete banking collapse, leading to the Great Depression, mass unemployment, and a prolonged economic recovery.",
+    summary: "The deepest and longest financial crisis in modern history, resetting the global economic order."
+  },
+  "2000_dotcom": {
+    name: "2000 Dot-com Bubble",
+    period: "2000 – 2007",
+    peak: "94.0",
+    drawdown: "-78.0%",
+    recovery: "7 Years (S&P 500 nominal recovery, NASDAQ took 15 years)",
+    why: "Massive speculation in internet startups ('dot-com' companies), driven by hype surrounding the web and loose monetary conditions. Most startups burned through cash with no path to profitability. The bubble popped in March 2000 as interest rates rose and capital dried up.",
+    summary: "A technology-driven speculative mania that wiped out trillions in market value but paved the way for the modern internet."
+  },
+  "2007_gfc": {
+    name: "2008 Subprime / GFC",
+    period: "2007 – 2013",
+    peak: "81.0",
+    drawdown: "-57.0%",
+    recovery: "5.5 Years (To recover the October 2007 pre-crisis S&P 500 peak)",
+    why: "A housing bubble fueled by high-risk subprime mortgages, predatory lending practices, and the proliferation of complex financial derivatives (MBS/CDOs). The collapse of the mortgage market led to huge banking write-downs, the failure of major investment banks like Lehman Brothers, and a global credit freeze.",
+    summary: "A systemic credit and banking crisis that pushed the global financial system to the brink of collapse."
+  },
+  "2020_covid": {
+    name: "2020 Covid Crash",
+    period: "2020",
+    peak: "67.0",
+    drawdown: "-34.0%",
+    recovery: "8 Months (Fastest bear market recovery in history)",
+    why: "The sudden onset of the COVID-19 pandemic led to government-mandated global lockdowns, halting economic activity, disrupting supply chains, and causing extreme panic. The market bottomed rapidly and staged a historic V-shaped recovery due to unprecedented monetary easing (QE) and fiscal stimulus.",
+    summary: "An exogenous health crisis that triggered the sharpest, fastest market decline and recovery in history."
+  },
+  "2021_meme": {
+    name: "2021 Meme / SPAC Era",
+    period: "2021 – 2024",
+    peak: "86.0",
+    drawdown: "-25.0%",
+    recovery: "2 Years (S&P 500 reached new all-time highs in January 2024)",
+    why: "Zero interest rates, lockdown savings, and government stimulus checks combined with fee-free retail trading apps to create a wave of retail speculation. Traders drove massive surges in 'meme stocks' (GME, AMC), SPACs, and hyper-valued tech/growth stocks. The bubble popped in 2022 due to rising inflation and aggressive Fed rate hikes.",
+    summary: "A liquidity-driven retail speculation bubble that collapsed in the face of inflation and monetary tightening."
+  }
+};
+
 function filterByRange(snapshots: SnapshotSummary[], range: TimeRange): SnapshotSummary[] {
   const cutoff = new Date(Date.now() - RANGE_DAYS[range] * 86400000);
   return snapshots.filter(s => new Date(s.snapshot_date) >= cutoff);
@@ -42,9 +109,58 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
   const [activeRange, setActiveRange] = useState<TimeRange>('All');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
+  const [activeCrisisInfo, setActiveCrisisInfo] = useState<any | null>(null);
 
   const similarities = data?.crisis_similarities ?? [];
   const topSimilar = similarities[0];
+
+  // Set the selected date needle to the closest matching snapshot for a crisis era
+  const handleSelectEra = (era: any) => {
+    if (!era.peak_date) return;
+
+    // Switch range to 'All' so that any historical year is visible on the chart
+    setActiveRange('All');
+
+    const targetYear = era.peak_date.slice(0, 4);
+    const targetMonth = era.peak_date.slice(5, 7);
+
+    // Try finding a snapshot in the exact month first
+    let matched = snapshots.find(s => s.snapshot_date.startsWith(`${targetYear}-${targetMonth}`));
+
+    // Fall back to the absolute closest snapshot in time if no month-level snapshot match
+    if (!matched && snapshots.length > 0) {
+      const targetTime = new Date(era.peak_date).getTime();
+      let minDiff = Infinity;
+      for (const s of snapshots) {
+        const diff = Math.abs(new Date(s.snapshot_date).getTime() - targetTime);
+        if (diff < minDiff) {
+          minDiff = diff;
+          matched = s;
+        }
+      }
+    }
+
+    if (matched) {
+      const yearStr = matched.snapshot_date.slice(0, 4);
+      setSelectedYear(yearStr);
+      setSelectedDate(matched.snapshot_date);
+    }
+  };
+
+  // Close the crisis explanation modal when the Escape key is pressed
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveCrisisInfo(null);
+      }
+    };
+    if (activeCrisisInfo) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeCrisisInfo]);
 
   const filtered = useMemo(() => filterByRange(snapshots, activeRange), [snapshots, activeRange]);
 
@@ -94,7 +210,10 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
 
         {/* LEFT */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+          <motion.div
+            variants={fadeUp} custom={0} initial="hidden" animate="visible"
+            style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}
+          >
             <div>
               <div className="bi-eyebrow">HISTORICAL ANALYSIS</div>
               <div style={{ fontSize: 28, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 6, color: 'var(--ink-1)' }}>
@@ -109,19 +228,31 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
               </div>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
-              {TIME_RANGES.map((l) => (
-                <button key={l} onClick={() => setActiveRange(l)} style={{
-                  padding: '7px 14px', border: '1px solid var(--hairline)', borderRadius: 6,
-                  fontSize: 12, color: activeRange === l ? 'var(--ink-1)' : 'var(--ink-3)',
-                  fontFamily: 'var(--font-mono)', background: activeRange === l ? 'var(--panel-3)' : 'var(--panel)',
-                  cursor: 'pointer', letterSpacing: '0.06em',
-                }}>{l}</button>
+              {TIME_RANGES.map((l, i) => (
+                <motion.button
+                  key={l}
+                  custom={i}
+                  variants={fadeUp}
+                  initial="hidden"
+                  animate="visible"
+                  onClick={() => setActiveRange(l)}
+                  style={{
+                    padding: '7px 14px', border: '1px solid var(--hairline)', borderRadius: 6,
+                    fontSize: 12, color: activeRange === l ? 'var(--ink-1)' : 'var(--ink-3)',
+                    fontFamily: 'var(--font-mono)', background: activeRange === l ? 'var(--panel-3)' : 'var(--panel)',
+                    cursor: 'pointer', letterSpacing: '0.06em',
+                  }}
+                >{l}</motion.button>
               ))}
             </div>
-          </div>
+          </motion.div>
 
           {/* Chart */}
-          <div className="bi-card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <motion.div
+            className="bi-card"
+            variants={fadeUp} custom={1} initial="hidden" animate="visible"
+            style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>RISK SCORE · HISTORY</div>
               <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.08em' }}>MONTHLY · PERCENTILE-BASED</div>
@@ -137,17 +268,33 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                 <rect x="40" y="30" width="750" height="60" fill="var(--t-8)" opacity="0.05" />
                 <text x="60" y="52" fontSize="10" fontFamily="var(--font-mono)" letterSpacing="0.12em" fill="var(--t-8)" opacity="0.8">BUBBLE · 75+</text>
 
-                {/* Crisis markers */}
-                {crisisMarkers.map(m => (
-                  <g key={m.year}>
+                {/* Crisis markers with staggered fade-in */}
+                {crisisMarkers.map((m, i) => (
+                  <motion.g
+                    key={m.year}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.7 + i * 0.07, duration: 0.3 }}
+                  >
                     <line x1={m.x} x2={m.x} y1="30" y2="270" stroke="var(--hairline-2)" strokeDasharray="3 3" strokeWidth="1" />
                     <text x={m.x} y="285" fontSize="9" fontFamily="var(--font-mono)" fill="var(--ink-4)" textAnchor="middle">{m.label}</text>
-                  </g>
+                  </motion.g>
                 ))}
 
-                {/* Real data line */}
+                {/* Animated chart line */}
                 {chartPath && (
-                  <path d={chartPath} fill="none" stroke="var(--ink-1)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <motion.path
+                    key={activeRange}
+                    d={chartPath}
+                    fill="none"
+                    stroke="var(--ink-1)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    initial={{ pathLength: 0, opacity: 0 }}
+                    animate={{ pathLength: 1, opacity: 1 }}
+                    transition={{ pathLength: { duration: 1.4, ease: 'easeInOut' as const }, opacity: { duration: 0.3 } }}
+                  />
                 )}
 
                 {/* Highlight selected date */}
@@ -157,10 +304,14 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                   const x = 40 + (idx / (filtered.length - 1)) * 750;
                   const y = 30 + (1 - filtered[idx].composite_score / 100) * 240;
                   return (
-                    <g>
+                    <motion.g
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.25 }}
+                    >
                       <line x1={x} x2={x} y1="30" y2="270" stroke="var(--t-7)" strokeWidth="1.5" />
                       <circle cx={x} cy={y} r="5" fill="var(--t-7)" />
-                    </g>
+                    </motion.g>
                   );
                 })()}
 
@@ -169,10 +320,13 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                 )}
               </svg>
             </div>
-          </div>
+          </motion.div>
 
           {/* Month/Year selector */}
-          <div className="bi-card">
+          <motion.div
+            className="bi-card"
+            variants={fadeUp} custom={2} initial="hidden" animate="visible"
+          >
             <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.10em', marginBottom: 12 }}>SELECT MONTH</div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <select
@@ -183,78 +337,159 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                 {years.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                {monthsForYear.map(s => {
-                  const month = parseInt(s.snapshot_date.slice(5, 7), 10) - 1;
-                  const isSelected = selectedDate === s.snapshot_date;
-                  const tone = tempVar(s.composite_score);
-                  return (
-                    <button
-                      key={s.snapshot_date}
-                      onClick={() => setSelectedDate(isSelected ? null : s.snapshot_date)}
-                      style={{
-                        fontFamily: 'var(--font-mono)', fontSize: 11, padding: '5px 9px', borderRadius: 6,
-                        border: `1px solid ${isSelected ? tone : 'var(--hairline)'}`,
-                        background: isSelected ? `color-mix(in srgb, ${tone} 20%, var(--panel-2))` : 'var(--panel-2)',
-                        color: isSelected ? tone : 'var(--ink-2)',
-                        cursor: 'pointer', letterSpacing: '0.04em',
-                      }}
-                    >{MONTH_NAMES[month]}</button>
-                  );
-                })}
+                <AnimatePresence mode="wait">
+                  {monthsForYear.map((s, i) => {
+                    const month = parseInt(s.snapshot_date.slice(5, 7), 10) - 1;
+                    const isSelected = selectedDate === s.snapshot_date;
+                    const tone = tempVar(s.composite_score);
+                    return (
+                      <motion.button
+                        key={`${selectedYear}-${s.snapshot_date}`}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ delay: i * 0.04, duration: 0.22, ease: 'easeOut' as const }}
+                        onClick={() => setSelectedDate(isSelected ? null : s.snapshot_date)}
+                        style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 11, padding: '5px 9px', borderRadius: 6,
+                          border: `1px solid ${isSelected ? tone : 'var(--hairline)'}`,
+                          background: isSelected ? `color-mix(in srgb, ${tone} 20%, var(--panel-2))` : 'var(--panel-2)',
+                          color: isSelected ? tone : 'var(--ink-2)',
+                          cursor: 'pointer', letterSpacing: '0.04em',
+                        }}
+                      >{MONTH_NAMES[month]}</motion.button>
+                    );
+                  })}
+                </AnimatePresence>
                 {monthsForYear.length === 0 && (
                   <span className="mono" style={{ fontSize: 11, color: 'var(--ink-4)' }}>No data for {selectedYear}</span>
                 )}
               </div>
             </div>
 
-            {/* Detail card */}
-            {detailSnap && (
-              <div style={{ marginTop: 16, padding: '14px 16px', background: 'var(--panel-3)', borderRadius: 8, border: '1px solid var(--hairline)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                  <div>
-                    <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.10em' }}>{detailSnap.snapshot_date}</div>
-                    <div className="mono" style={{ fontSize: 11, color: tempVar(detailSnap.composite_score), marginTop: 3, letterSpacing: '0.08em' }}>{riskTier(detailSnap.composite_score).tier}</div>
-                  </div>
-                  <div className="mono tnum" style={{ fontSize: 36, lineHeight: 1, color: tempVar(detailSnap.composite_score), fontWeight: 500 }}>
-                    {detailSnap.composite_score.toFixed(1)}
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-                  {[
-                    { label: 'VAL',  score: detailSnap.valuation_score },
-                    { label: 'MAC',  score: detailSnap.macro_stress_score },
-                    { label: 'LEV',  score: detailSnap.leverage_credit_score },
-                    { label: 'SEN',  score: detailSnap.sentiment_score },
-                    { label: 'CON',  score: detailSnap.concentration_score },
-                  ].map(cat => (
-                    <div key={cat.label} style={{ textAlign: 'center' }}>
-                      <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.06em', marginBottom: 4 }}>{cat.label}</div>
-                      <div className="mono tnum" style={{ fontSize: 18, color: tempVar(cat.score), fontWeight: 500 }}>{cat.score.toFixed(0)}</div>
-                      <div style={{ height: 3, background: 'var(--panel)', borderRadius: 2, marginTop: 4 }}>
-                        <div style={{ width: `${cat.score}%`, height: '100%', background: tempVar(cat.score), borderRadius: 2 }} />
+            {/* Detail card with AnimatePresence */}
+            <AnimatePresence>
+              {detailSnap && (
+                <motion.div
+                  key={detailSnap.snapshot_date}
+                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                  animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
+                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                  transition={{ duration: 0.3, ease: 'easeInOut' as const }}
+                  style={{ overflow: 'hidden' }}
+                >
+                  <div style={{ padding: '14px 16px', background: 'var(--panel-3)', borderRadius: 8, border: '1px solid var(--hairline)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                      <div>
+                        <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.10em' }}>{detailSnap.snapshot_date}</div>
+                        <div className="mono" style={{ fontSize: 11, color: tempVar(detailSnap.composite_score), marginTop: 3, letterSpacing: '0.08em' }}>{riskTier(detailSnap.composite_score).tier}</div>
                       </div>
+                      <motion.div
+                        className="mono tnum"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.15, duration: 0.28 }}
+                        style={{ fontSize: 36, lineHeight: 1, color: tempVar(detailSnap.composite_score), fontWeight: 500 }}
+                      >
+                        {detailSnap.composite_score.toFixed(1)}
+                      </motion.div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                      {[
+                        { label: 'VAL', score: detailSnap.valuation_score },
+                        { label: 'MAC', score: detailSnap.macro_stress_score },
+                        { label: 'LEV', score: detailSnap.leverage_credit_score },
+                        { label: 'SEN', score: detailSnap.sentiment_score },
+                        { label: 'CON', score: detailSnap.concentration_score },
+                      ].map((cat, i) => (
+                        <motion.div
+                          key={cat.label}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.1 + i * 0.06, duration: 0.24 }}
+                          style={{ textAlign: 'center' }}
+                        >
+                          <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.06em', marginBottom: 4 }}>{cat.label}</div>
+                          <div className="mono tnum" style={{ fontSize: 18, color: tempVar(cat.score), fontWeight: 500 }}>{cat.score.toFixed(0)}</div>
+                          <div style={{ height: 3, background: 'var(--panel)', borderRadius: 2, marginTop: 4 }}>
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${cat.score}%` }}
+                              transition={{ delay: 0.2 + i * 0.06, duration: 0.5, ease: 'easeOut' as const }}
+                              style={{ height: '100%', background: tempVar(cat.score), borderRadius: 2 }}
+                            />
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </div>
 
         {/* RIGHT — similarity cards */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)', minHeight: 0, overflow: 'auto' }}>
-          <div className="bi-eyebrow">HISTORICAL SIMILARITY</div>
+          <motion.div
+            className="bi-eyebrow"
+            variants={fadeRight} custom={0} initial="hidden" animate="visible"
+          >HISTORICAL SIMILARITY</motion.div>
           {(similarities.length > 0 ? similarities : [
-            { crisis_id:'2000_dotcom', display_name:'2000 · Dot-com Bubble', peak_score:94, drawdown_pct:-78, similarity_score:82 },
-            { crisis_id:'1929_crash',  display_name:'1929 · Wall St. Crash',  peak_score:89, drawdown_pct:-89, similarity_score:64 },
-            { crisis_id:'2021_meme',   display_name:'2021 · Meme / SPAC Era', peak_score:86, drawdown_pct:-25, similarity_score:71 },
-            { crisis_id:'2007_gfc',    display_name:'2008 · Subprime / GFC',  peak_score:81, drawdown_pct:-57, similarity_score:41 },
-            { crisis_id:'2020_covid',  display_name:'2020 · Covid Crash',     peak_score:67, drawdown_pct:-34, similarity_score:22 },
-          ] as any[]).map((era) => (
-            <div key={era.crisis_id} className="bi-card bi-hoverable" style={{ padding: 'calc(var(--pad-card) * 0.66)' }}>
+            { crisis_id:'2000_dotcom', display_name:'2000 · Dot-com Bubble', peak_score:94, drawdown_pct:-78, similarity_score:82, peak_date: '2000-03-10' },
+            { crisis_id:'1929_crash',  display_name:'1929 · Wall St. Crash',  peak_score:89, drawdown_pct:-89, similarity_score:64, peak_date: '1929-09-03' },
+            { crisis_id:'2021_meme',   display_name:'2021 · Meme / SPAC Era', peak_score:86, drawdown_pct:-25, similarity_score:71, peak_date: '2021-11-22' },
+            { crisis_id:'2007_gfc',    display_name:'2008 · Subprime / GFC',  peak_score:81, drawdown_pct:-57, similarity_score:41, peak_date: '2007-10-09' },
+            { crisis_id:'2020_covid',  display_name:'2020 · Covid Crash',     peak_score:67, drawdown_pct:-34, similarity_score:22, peak_date: '2020-02-19' },
+          ] as any[]).map((era, i) => (
+            <motion.div
+              key={era.crisis_id}
+              className="bi-card bi-hoverable"
+              custom={i + 1}
+              variants={fadeRight}
+              initial="hidden"
+              animate="visible"
+              onClick={() => handleSelectEra(era)}
+              style={{ padding: 'calc(var(--pad-card) * 0.66)' }}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink-1)' }}>{era.display_name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink-1)' }}>{era.display_name}</div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveCrisisInfo(era);
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 4,
+                        cursor: 'pointer',
+                        color: 'var(--ink-3)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '50%',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = 'var(--ink-1)';
+                        e.currentTarget.style.backgroundColor = 'var(--panel-3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = 'var(--ink-3)';
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                      title="Learn more about this crisis"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                      </svg>
+                    </button>
+                  </div>
                   <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 4, letterSpacing: '0.06em' }}>
                     PEAK {era.peak_score} · DRAWDOWN {era.drawdown_pct}%
                   </div>
@@ -263,16 +498,177 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                   <div className="mono tnum" style={{ fontSize: 22, color: tempVar(era.similarity_score), fontWeight: 500 }}>
                     {era.similarity_score}<span style={{ fontSize: 13, color: 'var(--ink-4)' }}>%</span>
                   </div>
-                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.08em', marginTop: 2 }}>SIMILARITY</div>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.08em', marginTop: 2 }}>SIMILARITY TO TODAY</div>
                 </div>
               </div>
               <div style={{ height: 3, marginTop: 12, background: 'var(--panel-3)', borderRadius: 2 }}>
-                <div style={{ width: `${era.similarity_score}%`, height: '100%', background: tempVar(era.similarity_score), borderRadius: 2 }} />
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${era.similarity_score}%` }}
+                  transition={{ delay: 0.4 + i * 0.09, duration: 0.7, ease: 'easeOut' as const }}
+                  style={{ height: '100%', background: tempVar(era.similarity_score), borderRadius: 2 }}
+                />
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>
+
+      {/* Crisis Info Modal */}
+      <AnimatePresence>
+        {activeCrisisInfo && (() => {
+          const details = CRISIS_DETAILS[activeCrisisInfo.crisis_id] || {
+            name: activeCrisisInfo.display_name,
+            period: "N/A",
+            peak: activeCrisisInfo.peak_score?.toString() ?? "N/A",
+            drawdown: `${activeCrisisInfo.drawdown_pct}%`,
+            recovery: "Unknown",
+            why: "Details not available.",
+            summary: ""
+          };
+          return (
+            <div
+              style={{
+                position: 'fixed',
+                top: 0, left: 0, right: 0, bottom: 0,
+                zIndex: 10000,
+                display: 'grid',
+                placeItems: 'center',
+                background: 'rgba(5, 5, 7, 0.75)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+              }}
+              onClick={() => setActiveCrisisInfo(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                style={{
+                  width: '90%',
+                  maxWidth: 580,
+                  background: 'var(--panel)',
+                  border: '1px solid var(--hairline-2)',
+                  borderRadius: 16,
+                  padding: 28,
+                  boxShadow: '0 24px 64px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255,255,255,0.05)',
+                  position: 'relative',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 20
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close button (top right) */}
+                <button
+                  onClick={() => setActiveCrisisInfo(null)}
+                  style={{
+                    position: 'absolute',
+                    top: 20, right: 20,
+                    background: 'var(--panel-2)',
+                    border: '1px solid var(--hairline)',
+                    color: 'var(--ink-3)',
+                    width: 28, height: 28,
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    display: 'grid', placeItems: 'center',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = 'var(--ink-1)';
+                    e.currentTarget.style.borderColor = 'var(--hairline-2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = 'var(--ink-3)';
+                    e.currentTarget.style.borderColor = 'var(--hairline)';
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+
+                <div>
+                  <div className="bi-eyebrow" style={{ color: 'var(--t-8)' }}>{details.period}</div>
+                  <div style={{ fontSize: 24, fontWeight: 500, color: 'var(--ink-1)', marginTop: 4 }}>{details.name}</div>
+                </div>
+
+                {/* Stats grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div style={{ padding: '12px 16px', background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 10 }}>
+                    <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.06em' }}>PEAK SCORE & DRAWDOWN</div>
+                    <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--ink-1)', marginTop: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                      <span className="mono">{activeCrisisInfo.peak_score || details.peak}</span>
+                      <span className="mono" style={{ fontSize: 13, color: 'var(--t-3)', fontWeight: 500 }}>
+                        ({activeCrisisInfo.drawdown_pct || details.drawdown} drawdown)
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ padding: '12px 16px', background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 10 }}>
+                    <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.06em' }}>RECOVERY TIME</div>
+                    <div className="mono" style={{ fontSize: 13, color: 'var(--t-8)', fontWeight: 600, marginTop: 4, lineHeight: 1.3 }}>
+                      {details.recovery}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description section */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.08em' }}>WHAT HAPPENED & WHY</div>
+                  <div style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.55 }}>
+                    {details.why}
+                  </div>
+                </div>
+
+                {details.summary && (
+                  <div style={{
+                    padding: '12px 16px',
+                    background: 'color-mix(in srgb, var(--t-8) 8%, var(--panel-2))',
+                    borderLeft: '3px solid var(--t-8)',
+                    borderRadius: '0 8px 8px 0',
+                    fontSize: 13.5,
+                    color: 'var(--ink-1)',
+                    lineHeight: 1.45,
+                    fontStyle: 'italic'
+                  }}>
+                    {details.summary}
+                  </div>
+                )}
+
+                {/* Bottom action button */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                  <button
+                    onClick={() => setActiveCrisisInfo(null)}
+                    style={{
+                      background: 'var(--panel-3)',
+                      border: '1px solid var(--hairline-2)',
+                      color: 'var(--ink-1)',
+                      padding: '10px 20px',
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--panel-2)';
+                      e.currentTarget.style.borderColor = 'var(--ink-4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--panel-3)';
+                      e.currentTarget.style.borderColor = 'var(--hairline-2)';
+                    }}
+                  >
+                    Close Explanation
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
     </div>
   );
 }
