@@ -72,10 +72,12 @@ function CategoryCard({
   cat,
   compositeScore,
   focused,
+  onOpenDetail,
 }: {
   cat: ReturnType<typeof mergeWithLive>[number];
   compositeScore: number;
   focused: boolean;
+  onOpenDetail: (id: string) => void;
 }) {
   const tone = cat.score !== null ? tempVar(cat.score) : 'var(--ink-3)';
   const weightPct = Math.round(cat.weight * 100);
@@ -85,6 +87,7 @@ function CategoryCard({
     <div
       id={`method-${cat.id}`}
       className="bi-card bi-hoverable"
+      onClick={() => onOpenDetail(cat.id)}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -94,6 +97,7 @@ function CategoryCard({
         outline: focused ? `2px solid ${tone}` : 'none',
         outlineOffset: 2,
         transition: 'outline 0.2s ease',
+        cursor: 'pointer',
       }}
     >
       <div style={{ position: 'absolute', left: 0, top: 14, bottom: 14, width: 3, background: tone, opacity: 0.85, borderRadius: 2 }} />
@@ -161,6 +165,15 @@ function CategoryCard({
           ))}
         </div>
       )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--hairline)' }}>
+        <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 5 }}>
+          DETAILS
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
     </div>
   );
 }
@@ -169,6 +182,10 @@ export default function ScreenMethodology({ data, palette, onCyclePalette, onNav
   const cats = mergeWithLive(data?.categories);
   const compositeScore = data?.composite_score ?? 0;
   const activeCats = cats.filter((c) => c.weight > 0);
+
+  function handleOpenDetail(id: string) {
+    onNavigate(`methodology-detail:${id}`);
+  }
   const focusRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -223,10 +240,7 @@ export default function ScreenMethodology({ data, palette, onCyclePalette, onNav
               <div
                 key={c.id}
                 title={`${c.display_name} — ${Math.round(c.weight * 100)}%`}
-                onClick={() => {
-                  const el = document.getElementById(`method-${c.id}`);
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }}
+                onClick={() => onNavigate(`methodology-detail:${c.id}`)}
                 style={{
                   width: `${c.weight * 100}%`,
                   background: c.score !== null ? tempVar(c.score) : 'var(--ink-4)',
@@ -248,6 +262,7 @@ export default function ScreenMethodology({ data, palette, onCyclePalette, onNav
               cat={cat}
               compositeScore={compositeScore}
               focused={focusCategory === cat.id}
+              onOpenDetail={handleOpenDetail}
             />
           ))}
         </div>

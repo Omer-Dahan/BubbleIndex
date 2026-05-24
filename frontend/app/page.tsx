@@ -7,11 +7,12 @@ import ScreenIndicators from '@/components/ScreenIndicators';
 import ScreenReplay from '@/components/ScreenReplay';
 import ScreenAI from '@/components/ScreenAI';
 import ScreenMethodology from '@/components/ScreenMethodology';
+import ScreenMethodologyDetail from '@/components/ScreenMethodologyDetail';
 import ScreenFooter from '@/components/ScreenFooter';
 import { api } from '@/lib/api';
 import type { RiskScoreResponse, SnapshotSummary, GaugeKind, Palette, Density, Theme } from '@/lib/types';
 
-type Screen = 'home' | 'historical' | 'indicators' | 'replay' | 'ai' | 'methodology' | 'footer';
+type Screen = 'home' | 'historical' | 'indicators' | 'replay' | 'ai' | 'methodology' | 'methodology-detail' | 'footer';
 const PALETTES: Palette[] = ['temperature', 'traffic', 'violet', 'mono'];
 
 export default function App() {
@@ -107,7 +108,11 @@ export default function App() {
     : data;
 
   const handleNavigate = useCallback((s: string) => {
-    if (s.startsWith('methodology:')) {
+    if (s.startsWith('methodology-detail:')) {
+      const cat = s.split(':')[1];
+      setFocusCategory(cat);
+      setScreen('methodology-detail');
+    } else if (s.startsWith('methodology:')) {
       const cat = s.split(':')[1];
       setFocusCategory(cat);
       setScreen('methodology');
@@ -156,8 +161,9 @@ export default function App() {
           {screen === 'indicators'  && <ScreenIndicators {...screenProps} snapshots={snapshots} />}
           {screen === 'replay'      && <ScreenReplay     {...screenProps} snapshots={snapshots} />}
           {screen === 'ai'          && <ScreenAI         {...screenProps} />}
-          {screen === 'methodology' && <ScreenMethodology {...screenProps} focusCategory={focusCategory} />}
-          {screen === 'footer'      && <ScreenFooter palette={palette} onCyclePalette={cyclePalette} onNavigate={handleNavigate} onOpenTweaks={openTweaks} />}
+          {screen === 'methodology'        && <ScreenMethodology {...screenProps} focusCategory={focusCategory} />}
+          {screen === 'methodology-detail' && <ScreenMethodologyDetail {...screenProps} category={focusCategory ?? ''} />}
+          {screen === 'footer'             && <ScreenFooter palette={palette} onCyclePalette={cyclePalette} onNavigate={handleNavigate} onOpenTweaks={openTweaks} />}
         </motion.div>
       </AnimatePresence>
 
