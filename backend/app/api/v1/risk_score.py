@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.schemas.risk_score import RiskScoreResponse
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/risk-score", tags=["risk-score"])
 
@@ -26,6 +27,7 @@ def get_latest_score(request: Request):
 
 
 @router.post("/refresh", response_model=RiskScoreResponse)
+@limiter.limit("5/minute")
 def refresh_score(request: Request):
     engine = _get_engine(request)
     cache = getattr(request.app.state, "file_cache", None)

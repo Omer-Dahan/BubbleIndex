@@ -69,3 +69,13 @@ ALL_INDICATOR_NAMES = [
     for cat in WEIGHT_CONFIG.values()
     for ind_name in cat["indicators"]
 ]
+
+# Raw FRED/derived series stored in the indicator_series table
+_RAW_SERIES_IDS = {
+    "DDDM01USA156NWDB", "shiller_cape", "sp500_pe", "sp500_ps",
+    "yield_curve_spread", "FEDFUNDS", "unemp_trend", "cpi_yoy",
+    "VIXCLS", "BAMLH0A0HYM2", "margin_debt_yoy",
+    "vix_trend", "ipo_volume_yoy", "top10_concentration",
+}
+
+VALID_SERIES_IDS: frozenset[str] = frozenset(ALL_INDICATOR_NAMES) | _RAW_SERIES_IDS

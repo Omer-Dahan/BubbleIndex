@@ -3,6 +3,7 @@ from fastapi import APIRouter, Request, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.db.models.indicator_series import IndicatorSeries
+from app.scoring.weights import VALID_SERIES_IDS
 
 router = APIRouter(prefix="/indicators", tags=["indicators"])
 
@@ -46,6 +47,9 @@ def get_indicator_history(
     start_date: date = Query(default=None),
     end_date: date = Query(default=None),
 ):
+    if indicator_name not in VALID_SERIES_IDS:
+        raise HTTPException(status_code=404, detail="Indicator not found")
+
     if end_date is None:
         end_date = date.today()
     if start_date is None:

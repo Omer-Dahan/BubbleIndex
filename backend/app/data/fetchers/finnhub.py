@@ -23,8 +23,9 @@ class FinnhubFetcher(BaseFetcher):
             return cached["pe"]
         try:
             url = f"{BASE_URL}/stock/metric"
-            params = {"symbol": symbol, "metric": "all", "token": self.settings.finnhub_api_key}
-            raw = self._fetch_with_retry(url, params)
+            params = {"symbol": symbol, "metric": "all"}
+            headers = {"X-Finnhub-Token": self.settings.finnhub_api_key}
+            raw = self._fetch_with_retry(url, params, headers=headers)
             pe = raw.get("metric", {}).get("peBasicExclExtraTTM")
             if pe and 5 < float(pe) < 200:
                 self.cache.set(cache_key, {"pe": float(pe)}, self.settings.finnhub_cache_ttl_hours)

@@ -3,6 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Request, HTTPException, Query
 from pydantic import BaseModel
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/history", tags=["history"])
 
@@ -59,6 +60,7 @@ class RecomputeResult(BaseModel):
 
 
 @router.post("/recompute", response_model=RecomputeResult)
+@limiter.limit("2/minute")
 def recompute_snapshots(request: Request):
     """Seed historical concentration data and force-recompute all existing snapshots."""
     session = getattr(request.app.state, "db_session", None)

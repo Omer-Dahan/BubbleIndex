@@ -25,11 +25,11 @@ class BaseFetcher(ABC):
     def _make_cache_key(self, *parts: str) -> str:
         return ":".join(str(p) for p in parts)
 
-    def _fetch_with_retry(self, url: str, params: dict, max_retries: int = 3) -> dict:
+    def _fetch_with_retry(self, url: str, params: dict, max_retries: int = 3, headers: dict | None = None) -> dict:
         delay = 1.0
         for attempt in range(max_retries):
             try:
-                resp = requests.get(url, params=params, timeout=30)
+                resp = requests.get(url, params=params, headers=headers, timeout=30)
                 if resp.status_code == 429:
                     wait = int(resp.headers.get("Retry-After", 60))
                     logger.warning("Rate limited, waiting %ds", wait)
