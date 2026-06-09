@@ -24,7 +24,7 @@ INDICATOR_SERIES_MAP: dict[str, tuple[str, int]] = {
     "buffett_indicator":   ("DDDM01USA156NWDB",   600),
     "shiller_cape":        ("shiller_cape",         60),
     "sp500_pe":            ("sp500_pe",             60),
-    "sp500_ps":            ("sp500_ps",             60),
+    "sp500_ps":            ("sp500_ps",            400),
     "yield_curve_spread":  ("yield_curve_spread",   90),
     "fed_funds_level":     ("FEDFUNDS",             60),
     "unemployment_trend":  ("unemp_trend",          60),

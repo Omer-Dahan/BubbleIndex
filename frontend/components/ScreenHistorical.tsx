@@ -1,9 +1,11 @@
 'use client';
 import { useMemo, useState, useEffect } from 'react';
+import { useIsMobile } from '@/lib/useBreakpoint';
 import { motion, AnimatePresence } from 'framer-motion';
 import Topbar from './Topbar';
 import { tempVar } from '@/lib/utils';
 import { riskTier } from '@/lib/utils';
+import { useLanguage } from '@/lib/LanguageContext';
 import type { RiskScoreResponse, SnapshotSummary, Palette } from '@/lib/types';
 
 const fadeUp = {
@@ -21,7 +23,6 @@ interface Props {
   snapshots: SnapshotSummary[];
   palette: Palette;
   onCyclePalette: () => void;
-  onNavigate: (s: string) => void;
   onOpenTweaks?: () => void;
 }
 
@@ -44,68 +45,14 @@ const CRISIS_MARKERS = [
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-const CRISIS_DETAILS: Record<string, {
-  name: string;
-  period: string;
-  peak: string;
-  drawdown: string;
-  recovery: string;
-  why: string;
-  summary: string;
-}> = {
-  "1929_crash": {
-    name: "1929 Wall St. Crash",
-    period: "1929 – 1954",
-    peak: "89.0",
-    drawdown: "-89.0%",
-    recovery: "25 Years (Nominal price recovery for DJIA & S&P predecessors)",
-    why: "A massive speculative bubble fueled by extreme margin debt and unregulated credit expansion during the 'Roaring Twenties'. When the bubble burst, panic selling triggered a complete banking collapse, leading to the Great Depression, mass unemployment, and a prolonged economic recovery.",
-    summary: "The deepest and longest financial crisis in modern history, resetting the global economic order."
-  },
-  "2000_dotcom": {
-    name: "2000 Dot-com Bubble",
-    period: "2000 – 2007",
-    peak: "94.0",
-    drawdown: "-78.0%",
-    recovery: "7 Years (S&P 500 nominal recovery, NASDAQ took 15 years)",
-    why: "Massive speculation in internet startups ('dot-com' companies), driven by hype surrounding the web and loose monetary conditions. Most startups burned through cash with no path to profitability. The bubble popped in March 2000 as interest rates rose and capital dried up.",
-    summary: "A technology-driven speculative mania that wiped out trillions in market value but paved the way for the modern internet."
-  },
-  "2007_gfc": {
-    name: "2008 Subprime / GFC",
-    period: "2007 – 2013",
-    peak: "81.0",
-    drawdown: "-57.0%",
-    recovery: "5.5 Years (To recover the October 2007 pre-crisis S&P 500 peak)",
-    why: "A housing bubble fueled by high-risk subprime mortgages, predatory lending practices, and the proliferation of complex financial derivatives (MBS/CDOs). The collapse of the mortgage market led to huge banking write-downs, the failure of major investment banks like Lehman Brothers, and a global credit freeze.",
-    summary: "A systemic credit and banking crisis that pushed the global financial system to the brink of collapse."
-  },
-  "2020_covid": {
-    name: "2020 Covid Crash",
-    period: "2020",
-    peak: "67.0",
-    drawdown: "-34.0%",
-    recovery: "8 Months (Fastest bear market recovery in history)",
-    why: "The sudden onset of the COVID-19 pandemic led to government-mandated global lockdowns, halting economic activity, disrupting supply chains, and causing extreme panic. The market bottomed rapidly and staged a historic V-shaped recovery due to unprecedented monetary easing (QE) and fiscal stimulus.",
-    summary: "An exogenous health crisis that triggered the sharpest, fastest market decline and recovery in history."
-  },
-  "2021_meme": {
-    name: "2021 Meme / SPAC Era",
-    period: "2021 – 2024",
-    peak: "86.0",
-    drawdown: "-25.0%",
-    recovery: "2 Years (S&P 500 reached new all-time highs in January 2024)",
-    why: "Zero interest rates, lockdown savings, and government stimulus checks combined with fee-free retail trading apps to create a wave of retail speculation. Traders drove massive surges in 'meme stocks' (GME, AMC), SPACs, and hyper-valued tech/growth stocks. The bubble popped in 2022 due to rising inflation and aggressive Fed rate hikes.",
-    summary: "A liquidity-driven retail speculation bubble that collapsed in the face of inflation and monetary tightening."
-  }
-};
-
 function filterByRange(snapshots: SnapshotSummary[], range: TimeRange): SnapshotSummary[] {
   const cutoff = new Date(Date.now() - RANGE_DAYS[range] * 86400000);
   return snapshots.filter(s => new Date(s.snapshot_date) >= cutoff);
 }
 
-export default function ScreenHistorical({ data, snapshots, palette, onCyclePalette, onNavigate, onOpenTweaks }: Props) {
+export default function ScreenHistorical({ data, snapshots, palette, onCyclePalette, onOpenTweaks }: Props) {
+  const { t, isRtl } = useLanguage();
+  const isMobile = useIsMobile();
   const [activeRange, setActiveRange] = useState<TimeRange>('All');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
@@ -113,6 +60,34 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
 
   const similarities = data?.crisis_similarities ?? [];
   const topSimilar = similarities[0];
+
+  const localizedMonths = isRtl
+    ? ['ינו','פבר','מרץ','אפר','מאי','יונ','יול','אוג','ספט','אוק','נוב','דצמ']
+    : MONTH_NAMES;
+
+  const ABBR: Record<string, string> = isRtl ? {
+    valuation: 'תמח',
+    macro_stress: 'מאק',
+    leverage_credit: 'מינ',
+    sentiment: 'סנט',
+    concentration: 'ריכ',
+  } : {
+    valuation: 'VAL',
+    macro_stress: 'MAC',
+    leverage_credit: 'LEV',
+    sentiment: 'SEN',
+    concentration: 'CON',
+  };
+
+  const getLocalizedCrisisName = (era: any) => {
+    if (!era) return '—';
+    const translatedName = t(`historical.crises.${era.crisis_id}.name`);
+    return translatedName !== `historical.crises.${era.crisis_id}.name`
+      ? translatedName
+      : era.display_name;
+  };
+
+  const topSimilarName = topSimilar ? getLocalizedCrisisName(topSimilar) : '';
 
   // Set the selected date needle to the closest matching snapshot for a crisis era
   const handleSelectEra = (era: any) => {
@@ -169,11 +144,25 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
     return Array.from(set).sort().reverse();
   }, [snapshots]);
 
-  const monthsForYear = useMemo(() =>
-    snapshots
-      .filter(s => s.snapshot_date.startsWith(selectedYear))
-      .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date)),
-  [snapshots, selectedYear]);
+  // One slot per calendar month (Jan-Dec); keep the latest snapshot when a month has several
+  // (e.g. the current month gets daily updates), and leave months without data as null
+  const monthsForYear = useMemo(() => {
+    const byMonth = new Map<number, SnapshotSummary>();
+    for (const s of snapshots) {
+      if (!s.snapshot_date.startsWith(selectedYear)) continue;
+      const month = parseInt(s.snapshot_date.slice(5, 7), 10) - 1;
+      const existing = byMonth.get(month);
+      if (!existing || s.snapshot_date > existing.snapshot_date) byMonth.set(month, s);
+    }
+    return Array.from({ length: 12 }, (_, month) => byMonth.get(month) ?? null);
+  }, [snapshots, selectedYear]);
+
+  const yearIndex = years.indexOf(selectedYear);
+  const goToYear = (idx: number) => {
+    if (idx < 0 || idx >= years.length) return;
+    setSelectedYear(years[idx]);
+    setSelectedDate(null);
+  };
 
   const detailSnap = useMemo(() =>
     selectedDate ? snapshots.find(s => s.snapshot_date === selectedDate) ?? null : null,
@@ -204,27 +193,27 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
   }, [filtered]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)' }}>
-      <Topbar active="historical" palette={palette} onCyclePalette={onCyclePalette} onNavigate={onNavigate} onOpenTweaks={onOpenTweaks} />
-      <div style={{ flex: 1, padding: 'var(--pad-screen)', display: 'grid', gridTemplateColumns: '1fr 380px', gap: 'var(--gap-grid)', minHeight: 0, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)', direction: isRtl ? 'rtl' : 'ltr' }}>
+      <Topbar palette={palette} onCyclePalette={onCyclePalette} onOpenTweaks={onOpenTweaks} />
+      <div style={{ flex: 1, padding: 'var(--pad-screen)', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 380px', gap: 'var(--gap-grid)', minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
 
         {/* LEFT */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)' }}>
           <motion.div
             variants={fadeUp} custom={0} initial="hidden" animate="visible"
-            style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}
+            style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexDirection: isRtl ? 'row-reverse' : 'row' }}
           >
-            <div>
-              <div className="bi-eyebrow">HISTORICAL ANALYSIS</div>
-              <div style={{ fontSize: 28, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 6, color: 'var(--ink-1)' }}>
+            <div style={{ textAlign: isRtl ? 'right' : 'left' }}>
+              <div className="bi-eyebrow">{t('historical.title')}</div>
+              <h1 style={{ fontSize: 28, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 6, color: 'var(--ink-1)' }}>
                 {topSimilar
-                  ? <>Closest analog: <span style={{ color: 'var(--t-8)', fontWeight: 500 }}>{topSimilar.display_name}</span>.</>
-                  : 'BubbleIndex risk score — 1990 to today.'}
-              </div>
+                  ? t('historical.subtitleWithAnalog', { analog: topSimilarName })
+                  : t('historical.subtitleDefault')}
+              </h1>
               <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 6 }}>
                 {filtered.length > 0
-                  ? `${filtered.length} monthly snapshots · ${filtered[0]?.snapshot_date} → ${filtered[filtered.length - 1]?.snapshot_date}`
-                  : 'No historical data yet — run backfill_history.py'}
+                  ? t('historical.dataStats', { count: filtered.length, start: filtered[0]?.snapshot_date, end: filtered[filtered.length - 1]?.snapshot_date })
+                  : t('historical.noData')}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -253,9 +242,9 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
             variants={fadeUp} custom={1} initial="hidden" animate="visible"
             style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>RISK SCORE · HISTORY</div>
-              <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.08em' }}>MONTHLY · PERCENTILE-BASED</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+              <h2 className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)', margin: 0 }}>{t('historical.chartTitle')}</h2>
+              <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.08em' }}>{t('historical.chartSubtitle')}</div>
             </div>
             <div style={{ flex: 1, position: 'relative' }}>
               <svg viewBox="0 0 800 320" width="100%" height="100%" preserveAspectRatio="none" style={{ display: 'block' }}>
@@ -266,7 +255,7 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                   <text key={m} x="30" y={30 + (4-i)*60+3} fontSize="11" fontFamily="var(--font-mono)" fill="var(--ink-4)" textAnchor="end">{m}</text>
                 ))}
                 <rect x="40" y="30" width="750" height="60" fill="var(--t-8)" opacity="0.05" />
-                <text x="60" y="52" fontSize="10" fontFamily="var(--font-mono)" letterSpacing="0.12em" fill="var(--t-8)" opacity="0.8">BUBBLE · 75+</text>
+                <text x="60" y="52" fontSize="10" fontFamily="var(--font-mono)" letterSpacing="0.12em" fill="var(--t-8)" opacity="0.8">{t('historical.bubbleLabel')}</text>
 
                 {/* Crisis markers with staggered fade-in */}
                 {crisisMarkers.map((m, i) => (
@@ -316,7 +305,7 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                 })()}
 
                 {filtered.length === 0 && (
-                  <text x="400" y="160" fontSize="13" fontFamily="var(--font-mono)" fill="var(--ink-4)" textAnchor="middle">No data — run backfill_history.py first</text>
+                  <text x="400" y="160" fontSize="13" fontFamily="var(--font-mono)" fill="var(--ink-4)" textAnchor="middle">{t('historical.noData')}</text>
                 )}
               </svg>
             </div>
@@ -326,44 +315,69 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
           <motion.div
             className="bi-card"
             variants={fadeUp} custom={2} initial="hidden" animate="visible"
+            style={{ textAlign: isRtl ? 'right' : 'left' }}
           >
-            <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.10em', marginBottom: 12 }}>SELECT MONTH</div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <select
-                value={selectedYear}
-                onChange={e => { setSelectedYear(e.target.value); setSelectedDate(null); }}
-                style={{ fontFamily: 'var(--font-mono)', fontSize: 12, background: 'var(--panel-2)', color: 'var(--ink-1)', border: '1px solid var(--hairline)', borderRadius: 6, padding: '6px 10px', cursor: 'pointer' }}
-              >
-                {years.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                <AnimatePresence mode="wait">
-                  {monthsForYear.map((s, i) => {
-                    const month = parseInt(s.snapshot_date.slice(5, 7), 10) - 1;
-                    const isSelected = selectedDate === s.snapshot_date;
-                    const tone = tempVar(s.composite_score);
+            <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.10em', marginBottom: 12 }}>{t('historical.selectMonth')}</div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+              <div className="mono" style={{ display: 'flex', alignItems: 'center', gap: 2, border: '1px solid var(--hairline)', borderRadius: 6, background: 'var(--panel-2)', padding: 2 }}>
+                <button
+                  onClick={() => goToYear(yearIndex + 1)}
+                  disabled={yearIndex < 0 || yearIndex >= years.length - 1}
+                  aria-label="Previous year"
+                  style={{
+                    width: 24, height: 24, display: 'grid', placeItems: 'center', border: 'none', borderRadius: 4,
+                    background: 'transparent', color: 'var(--ink-2)', fontSize: 13, lineHeight: 1,
+                    cursor: yearIndex >= years.length - 1 ? 'default' : 'pointer',
+                    opacity: yearIndex < 0 || yearIndex >= years.length - 1 ? 0.35 : 1,
+                  }}
+                >‹</button>
+                <span style={{ fontSize: 12, color: 'var(--ink-1)', minWidth: 42, textAlign: 'center', letterSpacing: '0.04em' }}>{selectedYear}</span>
+                <button
+                  onClick={() => goToYear(yearIndex - 1)}
+                  disabled={yearIndex <= 0}
+                  aria-label="Next year"
+                  style={{
+                    width: 24, height: 24, display: 'grid', placeItems: 'center', border: 'none', borderRadius: 4,
+                    background: 'transparent', color: 'var(--ink-2)', fontSize: 13, lineHeight: 1,
+                    cursor: yearIndex <= 0 ? 'default' : 'pointer',
+                    opacity: yearIndex <= 0 ? 0.35 : 1,
+                  }}
+                >›</button>
+              </div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+                {monthsForYear.map((s, month) => {
+                  if (!s) {
                     return (
-                      <motion.button
-                        key={`${selectedYear}-${s.snapshot_date}`}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ delay: i * 0.04, duration: 0.22, ease: 'easeOut' as const }}
-                        onClick={() => setSelectedDate(isSelected ? null : s.snapshot_date)}
+                      <span
+                        key={`${selectedYear}-${month}`}
+                        className="mono"
                         style={{
-                          fontFamily: 'var(--font-mono)', fontSize: 11, padding: '5px 9px', borderRadius: 6,
-                          border: `1px solid ${isSelected ? tone : 'var(--hairline)'}`,
-                          background: isSelected ? `color-mix(in srgb, ${tone} 20%, var(--panel-2))` : 'var(--panel-2)',
-                          color: isSelected ? tone : 'var(--ink-2)',
-                          cursor: 'pointer', letterSpacing: '0.04em',
+                          fontSize: 11, padding: '5px 9px', borderRadius: 6,
+                          border: '1px solid var(--hairline)', background: 'var(--panel-2)',
+                          color: 'var(--ink-4)', opacity: 0.4, letterSpacing: '0.04em',
                         }}
-                      >{MONTH_NAMES[month]}</motion.button>
+                      >{localizedMonths[month]}</span>
                     );
-                  })}
-                </AnimatePresence>
-                {monthsForYear.length === 0 && (
-                  <span className="mono" style={{ fontSize: 11, color: 'var(--ink-4)' }}>No data for {selectedYear}</span>
-                )}
+                  }
+                  const isSelected = selectedDate === s.snapshot_date;
+                  const tone = tempVar(s.composite_score);
+                  return (
+                    <motion.button
+                      key={`${selectedYear}-${month}`}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: month * 0.03, duration: 0.22, ease: 'easeOut' as const }}
+                      onClick={() => setSelectedDate(isSelected ? null : s.snapshot_date)}
+                      style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 11, padding: '5px 9px', borderRadius: 6,
+                        border: `1px solid ${isSelected ? tone : 'var(--hairline)'}`,
+                        background: isSelected ? `color-mix(in srgb, ${tone} 20%, var(--panel-2))` : 'var(--panel-2)',
+                        color: isSelected ? tone : 'var(--ink-2)',
+                        cursor: 'pointer', letterSpacing: '0.04em',
+                      }}
+                    >{localizedMonths[month]}</motion.button>
+                  );
+                })}
               </div>
             </div>
 
@@ -378,11 +392,13 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                   transition={{ duration: 0.3, ease: 'easeInOut' as const }}
                   style={{ overflow: 'hidden' }}
                 >
-                  <div style={{ padding: '14px 16px', background: 'var(--panel-3)', borderRadius: 8, border: '1px solid var(--hairline)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                      <div>
+                  <div style={{ padding: '14px 16px', background: 'var(--panel-3)', borderRadius: 8, border: '1px solid var(--hairline)', direction: isRtl ? 'rtl' : 'ltr' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+                      <div style={{ textAlign: isRtl ? 'right' : 'left' }}>
                         <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.10em' }}>{detailSnap.snapshot_date}</div>
-                        <div className="mono" style={{ fontSize: 11, color: tempVar(detailSnap.composite_score), marginTop: 3, letterSpacing: '0.08em' }}>{riskTier(detailSnap.composite_score).tier}</div>
+                        <div className="mono" style={{ fontSize: 11, color: tempVar(detailSnap.composite_score), marginTop: 3, letterSpacing: '0.08em' }}>
+                          {t(`riskTiers.${riskTier(detailSnap.composite_score).tier.toLowerCase() as any}.tier`).toUpperCase()}
+                        </div>
                       </div>
                       <motion.div
                         className="mono tnum"
@@ -394,13 +410,13 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                         {detailSnap.composite_score.toFixed(1)}
                       </motion.div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(5, 1fr)', gap: 8 }}>
                       {[
-                        { label: 'VAL', score: detailSnap.valuation_score },
-                        { label: 'MAC', score: detailSnap.macro_stress_score },
-                        { label: 'LEV', score: detailSnap.leverage_credit_score },
-                        { label: 'SEN', score: detailSnap.sentiment_score },
-                        { label: 'CON', score: detailSnap.concentration_score },
+                        { label: ABBR.valuation, score: detailSnap.valuation_score },
+                        { label: ABBR.macro_stress, score: detailSnap.macro_stress_score },
+                        { label: ABBR.leverage_credit, score: detailSnap.leverage_credit_score },
+                        { label: ABBR.sentiment, score: detailSnap.sentiment_score },
+                        { label: ABBR.concentration, score: detailSnap.concentration_score },
                       ].map((cat, i) => (
                         <motion.div
                           key={cat.label}
@@ -430,11 +446,11 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
         </div>
 
         {/* RIGHT — similarity cards */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)', minHeight: 0, overflow: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)', minHeight: 0, overflow: 'auto', textAlign: isRtl ? 'right' : 'left' }}>
           <motion.div
             className="bi-eyebrow"
             variants={fadeRight} custom={0} initial="hidden" animate="visible"
-          >HISTORICAL SIMILARITY</motion.div>
+          >{t('historical.historicalSimilarity')}</motion.div>
           {(similarities.length > 0 ? similarities : [
             { crisis_id:'2000_dotcom', display_name:'2000 · Dot-com Bubble', peak_score:94, drawdown_pct:-78, similarity_score:82, peak_date: '2000-03-10' },
             { crisis_id:'1929_crash',  display_name:'1929 · Wall St. Crash',  peak_score:89, drawdown_pct:-89, similarity_score:64, peak_date: '1929-09-03' },
@@ -452,10 +468,10 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
               onClick={() => handleSelectEra(era)}
               style={{ padding: 'calc(var(--pad-card) * 0.66)' }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink-1)' }}>{era.display_name}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+                <div style={{ textAlign: isRtl ? 'right' : 'left' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink-1)' }}>{getLocalizedCrisisName(era)}</div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -491,14 +507,14 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                     </button>
                   </div>
                   <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', marginTop: 4, letterSpacing: '0.06em' }}>
-                    PEAK {era.peak_score} · DRAWDOWN {era.drawdown_pct}%
+                    {t('historical.peakAndDrawdown', { peak: era.peak_score, drawdown: era.drawdown_pct })}
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
+                <div style={{ textAlign: isRtl ? 'left' : 'right' }}>
                   <div className="mono tnum" style={{ fontSize: 22, color: tempVar(era.similarity_score), fontWeight: 500 }}>
                     {era.similarity_score}<span style={{ fontSize: 13, color: 'var(--ink-4)' }}>%</span>
                   </div>
-                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.08em', marginTop: 2 }}>SIMILARITY TO TODAY</div>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.08em', marginTop: 2 }}>{t('historical.similarityToToday')}</div>
                 </div>
               </div>
               <div style={{ height: 3, marginTop: 12, background: 'var(--panel-3)', borderRadius: 2 }}>
@@ -517,15 +533,16 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
       {/* Crisis Info Modal */}
       <AnimatePresence>
         {activeCrisisInfo && (() => {
-          const details = CRISIS_DETAILS[activeCrisisInfo.crisis_id] || {
-            name: activeCrisisInfo.display_name,
-            period: "N/A",
-            peak: activeCrisisInfo.peak_score?.toString() ?? "N/A",
-            drawdown: `${activeCrisisInfo.drawdown_pct}%`,
-            recovery: "Unknown",
-            why: "Details not available.",
-            summary: ""
-          };
+          const detailKey = activeCrisisInfo.crisis_id;
+          const translatedName = t(`historical.crises.${detailKey}.name`);
+          const name = translatedName !== `historical.crises.${detailKey}.name` ? translatedName : activeCrisisInfo.display_name;
+          const period = t(`historical.crises.${detailKey}.period`) !== `historical.crises.${detailKey}.period` ? t(`historical.crises.${detailKey}.period`) : '—';
+          const peakVal = activeCrisisInfo.peak_score ?? t(`historical.crises.${detailKey}.peak`);
+          const drawdownVal = activeCrisisInfo.drawdown_pct ?? t(`historical.crises.${detailKey}.drawdown`);
+          const recovery = t(`historical.crises.${detailKey}.recovery`) !== `historical.crises.${detailKey}.recovery` ? t(`historical.crises.${detailKey}.recovery`) : '—';
+          const why = t(`historical.crises.${detailKey}.why`) !== `historical.crises.${detailKey}.why` ? t(`historical.crises.${detailKey}.why`) : '—';
+          const summary = t(`historical.crises.${detailKey}.summary`) !== `historical.crises.${detailKey}.summary` ? t(`historical.crises.${detailKey}.summary`) : '';
+
           return (
             <div
               style={{
@@ -547,7 +564,7 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                 style={{
                   width: '90%',
-                  maxWidth: 580,
+                  maxWidth: isMobile ? '95vw' : 580,
                   background: 'var(--panel)',
                   border: '1px solid var(--hairline-2)',
                   borderRadius: 16,
@@ -556,16 +573,20 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                   position: 'relative',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 20
+                  gap: 20,
+                  direction: isRtl ? 'rtl' : 'ltr',
+                  textAlign: isRtl ? 'right' : 'left'
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Close button (top right) */}
+                {/* Close button (top right/left) */}
                 <button
                   onClick={() => setActiveCrisisInfo(null)}
                   style={{
                     position: 'absolute',
-                    top: 20, right: 20,
+                    top: 20,
+                    right: isRtl ? 'auto' : 20,
+                    left: isRtl ? 20 : 'auto',
                     background: 'var(--panel-2)',
                     border: '1px solid var(--hairline)',
                     color: 'var(--ink-3)',
@@ -591,54 +612,55 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                 </button>
 
                 <div>
-                  <div className="bi-eyebrow" style={{ color: 'var(--t-8)' }}>{details.period}</div>
-                  <div style={{ fontSize: 24, fontWeight: 500, color: 'var(--ink-1)', marginTop: 4 }}>{details.name}</div>
+                  <div className="bi-eyebrow" style={{ color: 'var(--t-8)' }}>{period}</div>
+                  <h2 style={{ fontSize: 24, fontWeight: 500, color: 'var(--ink-1)', marginTop: 4 }}>{name}</h2>
                 </div>
 
                 {/* Stats grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div style={{ padding: '12px 16px', background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 10 }}>
-                    <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.06em' }}>PEAK SCORE & DRAWDOWN</div>
-                    <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--ink-1)', marginTop: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                      <span className="mono">{activeCrisisInfo.peak_score || details.peak}</span>
+                  <div style={{ padding: '12px 16px', background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 10, textAlign: isRtl ? 'right' : 'left' }}>
+                    <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.06em' }}>{t('historical.peakScoreDrawdown')}</div>
+                    <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--ink-1)', marginTop: 4, display: 'flex', alignItems: 'baseline', gap: 6, flexDirection: isRtl ? 'row-reverse' : 'row', justifyContent: isRtl ? 'flex-start' : 'flex-start' }}>
+                      <span className="mono">{peakVal}</span>
                       <span className="mono" style={{ fontSize: 13, color: 'var(--t-3)', fontWeight: 500 }}>
-                        ({activeCrisisInfo.drawdown_pct || details.drawdown} drawdown)
+                        {t('historical.drawdownLabel', { drawdown: String(drawdownVal).replace('-', '') })}
                       </span>
                     </div>
                   </div>
-                  <div style={{ padding: '12px 16px', background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 10 }}>
-                    <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.06em' }}>RECOVERY TIME</div>
+                  <div style={{ padding: '12px 16px', background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 10, textAlign: isRtl ? 'right' : 'left' }}>
+                    <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.06em' }}>{t('historical.recoveryTime')}</div>
                     <div className="mono" style={{ fontSize: 13, color: 'var(--t-8)', fontWeight: 600, marginTop: 4, lineHeight: 1.3 }}>
-                      {details.recovery}
+                      {recovery}
                     </div>
                   </div>
                 </div>
 
                 {/* Description section */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.08em' }}>WHAT HAPPENED & WHY</div>
-                  <div style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.55 }}>
-                    {details.why}
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.08em' }}>{t('historical.whatHappened')}</div>
+                  <div style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.55, textWrap: 'pretty' }}>
+                    {why}
                   </div>
                 </div>
 
-                {details.summary && (
+                {summary && (
                   <div style={{
                     padding: '12px 16px',
                     background: 'color-mix(in srgb, var(--t-8) 8%, var(--panel-2))',
-                    borderLeft: '3px solid var(--t-8)',
-                    borderRadius: '0 8px 8px 0',
+                    borderLeft: isRtl ? 'none' : '3px solid var(--t-8)',
+                    borderRight: isRtl ? '3px solid var(--t-8)' : 'none',
+                    borderRadius: isRtl ? '8px 0 0 8px' : '0 8px 8px 0',
                     fontSize: 13.5,
                     color: 'var(--ink-1)',
                     lineHeight: 1.45,
                     fontStyle: 'italic'
                   }}>
-                    {details.summary}
+                    {summary}
                   </div>
                 )}
 
                 {/* Bottom action button */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                <div style={{ display: 'flex', justifyContent: isRtl ? 'flex-start' : 'flex-end', marginTop: 8 }}>
                   <button
                     onClick={() => setActiveCrisisInfo(null)}
                     style={{
@@ -661,7 +683,7 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                       e.currentTarget.style.borderColor = 'var(--hairline-2)';
                     }}
                   >
-                    Close Explanation
+                    {t('common.closeExplanation')}
                   </button>
                 </div>
               </motion.div>

@@ -16,7 +16,7 @@ def _latest(df: pd.DataFrame) -> float | None:
 
 
 def _value_n_days_ago(df: pd.DataFrame, n: int) -> float | None:
-    if df is None or len(df) < n:
+    if df is None or len(df) <= n:
         return None
     try:
         return float(df.iloc[-(n + 1)]["value"])
@@ -28,10 +28,17 @@ def compute_buffett_indicator(
     buffett_df: pd.DataFrame | None,
     wilshire_df: pd.DataFrame | None,
     gdp_df: pd.DataFrame | None,
+    max_stale_days: int = 400,
 ) -> tuple[float | None, str]:
     v = _latest(buffett_df)
-    if v is not None:
-        return v, "DDDM01USA156NWDB"
+    if v is not None and not buffett_df.empty:
+        last_date = buffett_df.iloc[-1]["date"]
+        if isinstance(last_date, str):
+            last_date = pd.to_datetime(last_date).date()
+        elif hasattr(last_date, "date"):
+            last_date = last_date.date()
+        if (date.today() - last_date).days <= max_stale_days:
+            return v, "DDDM01USA156NWDB"
     w = _latest(wilshire_df)
     g = _latest(gdp_df)
     if w is not None and g is not None and g > 0:
@@ -95,7 +102,7 @@ def compute_concentration(top10_pct: float | None) -> float | None:
 
 def compute_shiller_cape(df: pd.DataFrame) -> float | None:
     v = _latest(df)
-    if v is not None and 5.0 < v < 60.0:
+    if v is not None and 5.0 < v < 100.0:
         return v
     return None
 

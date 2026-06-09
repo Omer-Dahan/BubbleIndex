@@ -15,7 +15,8 @@ from app.data.fetchers.fred import FREDFetcher, FRED_SERIES
 from app.data.fetchers.yfinance_fetcher import YFinanceFetcher
 from app.data.fetchers.multpl import MultplFetcher
 from app.data.fetchers.shiller import ShillerFetcher
-from app.data.fetchers.ipo import IPOFetcher
+from app.data.fetchers.ipo import IPOFetcher, RITTER_HARDCODED
+from app.data.fetchers.dbnomics_fetcher import DBnomicsFetcher, DBNOMICS_SERIES
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class HistoricalBootstrapper:
         self.multpl = MultplFetcher(self.cache, settings)
         self.shiller = ShillerFetcher(self.cache, settings)
         self.ipo = IPOFetcher(self.cache, settings)
+        self.dbnomics = DBnomicsFetcher(self.cache, settings)
         self._flag_path = Path(settings.cache_dir) / "bootstrap_done.flag"
 
     def run_if_needed(self) -> bool:
@@ -74,7 +76,7 @@ class HistoricalBootstrapper:
         self._load_shiller_cape()
         self._load_sp500_ps()
         self._compute_cpi_yoy_history(fred_data.get("CPI", pd.DataFrame()))
-        self._compute_margin_debt_yoy_history(fred_data.get("MARGIN_DEBT", pd.DataFrame()))
+        self._load_margin_debt_dbnomics(start, end)
         self._load_ipo_volume()
 
         logger.info("Fetching yfinance series")
@@ -221,16 +223,24 @@ class HistoricalBootstrapper:
         if cpi_df.empty or len(cpi_df) < 13:
             logger.warning("  cpi_yoy: insufficient CPI data (%d rows)", len(cpi_df))
             return
+        df = cpi_df.copy()
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.sort_values("date").reset_index(drop=True)
         rows = []
-        for i in range(12, len(cpi_df)):
+        for i in range(len(df)):
             try:
-                latest = float(cpi_df.iloc[i]["value"])
-                past = float(cpi_df.iloc[i - 12]["value"])
+                current_date = df.iloc[i]["date"]
+                target_past = current_date - pd.DateOffset(months=12)
+                past_candidates = df[df["date"] <= target_past]
+                if past_candidates.empty:
+                    continue
+                past = float(past_candidates.iloc[-1]["value"])
                 if past == 0:
                     continue
+                latest = float(df.iloc[i]["value"])
                 yoy = (latest - past) / past * 100
                 rows.append({"series_id": "cpi_yoy", "source": "computed",
-                              "date": cpi_df.iloc[i]["date"], "value": round(yoy, 4)})
+                              "date": current_date.date(), "value": round(yoy, 4)})
             except (ValueError, KeyError):
                 continue
         if rows:
@@ -247,16 +257,24 @@ class HistoricalBootstrapper:
         if margin_df.empty or len(margin_df) < 5:
             logger.warning("  margin_debt_yoy: insufficient data (%d rows)", len(margin_df))
             return
+        df = margin_df.copy()
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.sort_values("date").reset_index(drop=True)
         rows = []
-        for i in range(4, len(margin_df)):
+        for i in range(len(df)):
             try:
-                latest = float(margin_df.iloc[i]["value"])
-                past = float(margin_df.iloc[i - 4]["value"])
+                current_date = df.iloc[i]["date"]
+                target_past = current_date - pd.DateOffset(months=12)
+                past_candidates = df[df["date"] <= target_past]
+                if past_candidates.empty:
+                    continue
+                past = float(past_candidates.iloc[-1]["value"])
                 if past == 0:
                     continue
+                latest = float(df.iloc[i]["value"])
                 yoy = (latest - past) / past * 100
                 rows.append({"series_id": "margin_debt_yoy", "source": "computed",
-                              "date": margin_df.iloc[i]["date"], "value": round(yoy, 4)})
+                              "date": current_date.date(), "value": round(yoy, 4)})
             except (ValueError, KeyError):
                 continue
         if rows:
@@ -268,6 +286,19 @@ class HistoricalBootstrapper:
             self.session.execute(stmt)
             self.session.commit()
             logger.info("  Computed margin_debt_yoy: %d rows", len(rows))
+
+    def _load_margin_debt_dbnomics(self, start: date, end: date) -> None:
+        series_path = DBNOMICS_SERIES["MARGIN_DEBT"]
+        try:
+            df = self.dbnomics.fetch_series(series_path, start, end)
+            if df.empty:
+                logger.warning("  margin_debt: DBnomics returned no data for %s", series_path)
+                return
+            self._store_series("BOGZ1FL663067003Q", "dbnomics", df)
+            self._compute_margin_debt_yoy_history(df)
+            logger.info("  Loaded margin_debt from DBnomics: %d rows", len(df))
+        except Exception as e:
+            logger.warning("  margin_debt: DBnomics fetch failed for %s: %s", series_path, e)
 
     def _load_ipo_volume(self) -> None:
         df = self.ipo.fetch_ipo_yoy_history()
@@ -310,6 +341,52 @@ class HistoricalBootstrapper:
             logger.info("Loading sp500_pe from multpl...")
             self._load_sp500_pe()
 
+        if self._count_series("sp500_ps") < 50:
+            logger.info("Reloading sp500_ps from multpl (by-year supplement)...")
+            self.cache.invalidate("multpl:sp500_ps_history")  # force fresh fetch with by-year fallback
+            self._load_sp500_ps()
+
+        # Use source-filtered count to avoid pollution from _store_derived daily writes
+        max_ritter_year = max(RITTER_HARDCODED.keys())
+        min_ritter_year = min(RITTER_HARDCODED.keys())
+        expected_ipo_rows = (max_ritter_year - min_ritter_year) * 12
+        ipo_ritter_count = self.session.query(IndicatorSeries).filter(
+            IndicatorSeries.series_id == "ipo_volume_yoy",
+            IndicatorSeries.source == "ritter"
+        ).count()
+        logger.info("IPO freshness: ritter count=%d expected=%d (max year=%d)", ipo_ritter_count, expected_ipo_rows, max_ritter_year)
+        if ipo_ritter_count < expected_ipo_rows:
+            logger.info("Reloading ipo_volume_yoy (ritter count %d < expected %d)...", ipo_ritter_count, expected_ipo_rows)
+            self.cache.invalidate("ipo:volume_yoy_history")
+            self._load_ipo_volume()
+
+        if self._count_series("margin_debt_yoy") < 20:
+            logger.info("Backfilling margin_debt_yoy from DBnomics...")
+            end = date.today()
+            start = end - timedelta(days=self.settings.historical_lookback_years * 365)
+            self._load_margin_debt_dbnomics(start, end)
+
+        if self._count_series("cpi_yoy") < 50:
+            logger.info("Backfilling cpi_yoy — checking CPIAUCSL in DB...")
+            cpi_rows = self.session.query(IndicatorSeries).filter(
+                IndicatorSeries.series_id == "CPIAUCSL"
+            ).order_by(IndicatorSeries.date).all()
+            if len(cpi_rows) >= 13:
+                cpi_df = pd.DataFrame([{"date": r.date, "value": r.value} for r in cpi_rows])
+                self._compute_cpi_yoy_history(cpi_df)
+            else:
+                logger.info("CPIAUCSL not in DB — fetching full history from FRED...")
+                end = date.today()
+                start = end - timedelta(days=self.settings.historical_lookback_years * 365)
+                try:
+                    cpi_df = self.fred.fetch_series("CPIAUCSL", start, end)
+                    if not cpi_df.empty:
+                        self._store_series("CPIAUCSL", "fred", cpi_df)
+                        self._compute_cpi_yoy_history(cpi_df)
+                        logger.info("Fetched and stored CPIAUCSL: %d rows", len(cpi_df))
+                except Exception as e:
+                    logger.warning("Could not fetch CPIAUCSL for cpi_yoy backfill: %s", e)
+
         self.session.commit()
 
     def _count_series(self, series_id: str) -> int:
@@ -338,13 +415,16 @@ class HistoricalBootstrapper:
                 self._ensure_derived_series_populated()
             else:
                 logger.info("Data is %d days stale, running incremental fetch from %s", (today - last_date).days, last_date)
-                start = last_date + timedelta(days=1)
                 end = today
 
                 fred_data: dict[str, pd.DataFrame] = {}
                 for name, fred_id in FRED_SERIES.items():
                     try:
-                        df = self.fred.fetch_series(fred_id, start, end)
+                        # Use each series' own last stored date so monthly/quarterly series
+                        # are not skipped when VIXCLS advances past their next release date.
+                        series_last = self.get_last_stored_date(fred_id)
+                        series_start = (series_last + timedelta(days=1)) if series_last else (last_date + timedelta(days=1))
+                        df = self.fred.fetch_series(fred_id, series_start, end)
                         fred_data[name] = df
                         self._store_series(fred_id, "fred", df)
                         if not df.empty:
@@ -358,8 +438,16 @@ class HistoricalBootstrapper:
                 self._compute_vix_trend_history(fred_data.get("VIX", pd.DataFrame()))
                 self._compute_unemp_trend_history(fred_data.get("UNEMPLOYMENT", pd.DataFrame()))
                 self._load_sp500_pe()
-                self._compute_cpi_yoy_history(fred_data.get("CPI", pd.DataFrame()))
-                self._compute_margin_debt_yoy_history(fred_data.get("MARGIN_DEBT", pd.DataFrame()))
+                self._load_ipo_volume()
+
+                # cpi_yoy: delta window is rarely ≥ 13 months. _ensure_derived_series_populated
+                # handles the full backfill (from DB or fresh FRED fetch) after this block.
+                cpi_df = fred_data.get("CPI", pd.DataFrame())
+                if not cpi_df.empty:
+                    self._compute_cpi_yoy_history(cpi_df)
+
+                # margin_debt: fetch latest quarter from DBnomics
+                self._load_margin_debt_dbnomics(last_date, end)
 
                 self.session.commit()
 

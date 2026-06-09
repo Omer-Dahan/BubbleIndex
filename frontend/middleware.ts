@@ -3,14 +3,17 @@ import { NextRequest, NextResponse } from 'next/server';
 export function middleware(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const apiOrigin = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+  // Next.js dev mode (Fast Refresh / webpack eval-source-map) requires 'unsafe-eval' to execute
+  // client modules — production builds don't use eval, so this stays dev-only.
+  const isDev = process.env.NODE_ENV !== 'production';
 
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''} https://www.googletagmanager.com`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    "img-src 'self' data: blob: https://www.google-analytics.com",
     "font-src 'self'",
-    `connect-src 'self' ${apiOrigin}`,
+    `connect-src 'self' ${apiOrigin} https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

@@ -1,8 +1,11 @@
 'use client';
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { useIsMobile } from '@/lib/useBreakpoint';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import Topbar from './Topbar';
 import { tempVar, makeSeries, riskTier } from '@/lib/utils';
+import { useLanguage } from '@/lib/LanguageContext';
 import type { RiskScoreResponse, SnapshotSummary, Palette } from '@/lib/types';
 
 interface Props {
@@ -10,7 +13,6 @@ interface Props {
   snapshots: SnapshotSummary[];
   palette: Palette;
   onCyclePalette: () => void;
-  onNavigate: (s: string) => void;
   onOpenTweaks?: () => void;
 }
 
@@ -366,12 +368,39 @@ function OdometerText({ text, direction }: OdometerTextProps) {
   );
 }
 
-export default function ScreenReplay({ data, snapshots, palette, onCyclePalette, onNavigate, onOpenTweaks }: Props) {
+export default function ScreenReplay({ data, snapshots, palette, onCyclePalette, onOpenTweaks }: Props) {
+  const { t, isRtl } = useLanguage();
+  const isMobile = useIsMobile();
   const sorted = useMemo(() =>
     [...snapshots].sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date)),
   [snapshots]);
 
   const usingRealData = sorted.length >= 4;
+
+  const ABBR: Record<string, string> = isRtl ? {
+    valuation: 'תמח',
+    macro_stress: 'מאק',
+    leverage_credit: 'מינ',
+    sentiment: 'סנט',
+    concentration: 'ריכ',
+  } : {
+    valuation: 'VAL',
+    macro_stress: 'MAC',
+    leverage_credit: 'LEV',
+    sentiment: 'SEN',
+    concentration: 'CON',
+  };
+
+  const getLocalizedImpact = (imp: string) => {
+    if (!isRtl) return `${imp} IMPACT`;
+    const map: Record<string, string> = {
+      CRITICAL: 'קריטית',
+      HIGH: 'גבוהה',
+      MODERATE: 'בינונית',
+      STABLE: 'נמוכה/יציבה',
+    };
+    return `השפעה: ${map[imp] || imp}`;
+  };
 
   // Fallback: generate 600-point simulated series when no real snapshots exist
   const fallback = useMemo(() => makeSeries(600, 31, 0.04, 0.58), []);
@@ -489,7 +518,7 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
   const currentSnap = usingRealData ? sorted[clampedIdx] : null;
   const currentScore = currentSnap
     ? currentSnap.composite_score
-    : Math.round((usingRealData ? 0 : fallback[clampedIdx] ?? 0.58) * 100);
+    : Math.round((fallback[clampedIdx] ?? 0.58) * 100);
   const currentDate = currentSnap
     ? currentSnap.snapshot_date
     : `${1900 + Math.round((clampedIdx / 599) * 125)}-01-01`;
@@ -523,7 +552,12 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
   useEffect(() => {
     setImgError(false);
   }, [displayYear, monthNum]);
-  const displayMonth = isNaN(monthNum) ? 'Jan' : MONTH_NAMES[monthNum - 1] || 'Jan';
+
+  const localizedMonths = isRtl
+    ? ['ינו', 'פבר', 'מרץ', 'אפר', 'מאי', 'יונ', 'יול', 'אוג', 'ספט', 'אוק', 'נוב', 'דצמ']
+    : MONTH_NAMES;
+
+  const displayMonth = isNaN(monthNum) ? (isRtl ? 'ינו' : 'Jan') : localizedMonths[monthNum - 1] || (isRtl ? 'ינו' : 'Jan');
   const displayScore = displayedValues.score;
 
   // Sub-scores for metrics panel
@@ -603,30 +637,30 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
   }, [usingRealData, sorted]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)' }}>
-      <Topbar active="replay" palette={palette} onCyclePalette={onCyclePalette} onNavigate={onNavigate} onOpenTweaks={onOpenTweaks} />
-      <div style={{ flex: 1, padding: 'var(--pad-screen)', display: 'grid', gridTemplateColumns: '1fr 380px', gap: 'var(--gap-grid)', minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)', direction: isRtl ? 'rtl' : 'ltr' }}>
+      <Topbar palette={palette} onCyclePalette={onCyclePalette} onOpenTweaks={onOpenTweaks} />
+      <div style={{ flex: 1, padding: 'var(--pad-screen)', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 380px', gap: 'var(--gap-grid)', minHeight: 0 }}>
 
         {/* LEFT COLUMN: Controls, Graph and Scrubber */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)' }}>
           
           {/* Header & Controls Panel */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-            <div>
-              <div className="bi-eyebrow">MARKET REPLAY</div>
-              <div style={{ fontSize: 28, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 6, color: 'var(--ink-1)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+            <div style={{ textAlign: isRtl ? 'right' : 'left' }}>
+              <div className="bi-eyebrow">{t('replay.title')}</div>
+              <h1 style={{ fontSize: 28, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 6, color: 'var(--ink-1)' }}>
                 {usingRealData
-                  ? `${sorted[0]?.snapshot_date?.slice(0, 4)} → today — ${sorted.length} monthly snapshots.`
-                  : '125 years of risk, scrubbed.'}
-              </div>
+                  ? t('replay.subtitle', { start: sorted[0]?.snapshot_date?.slice(0, 4), count: sorted.length })
+                  : t('replay.subtitleFallback')}
+              </h1>
             </div>
 
             {/* Playback & Speed controls */}
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: 4, background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 8, padding: 3 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+              <div style={{ display: 'flex', gap: 4, background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 8, padding: 3, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
                 <button
                   onClick={() => handlePlayControl('jump-start')}
-                  title="Jump to Start"
+                  title={isRtl ? 'קפוץ להתחלה' : 'Jump to Start'}
                   style={{
                     width: 32, height: 28, display: 'grid', placeItems: 'center',
                     border: 'none', background: 'transparent', color: 'var(--ink-3)',
@@ -637,7 +671,7 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
                 >⏮</button>
                 <button
                   onClick={() => handlePlayControl(isPlaying && playDirection === 'backward' ? 'pause' : 'play-reverse')}
-                  title="Play Backwards"
+                  title={isPlaying && playDirection === 'backward' ? (isRtl ? 'השהה' : 'Pause') : (isRtl ? 'נגן לאחור' : 'Play Backwards')}
                   style={{
                     width: 32, height: 28, display: 'grid', placeItems: 'center',
                     border: 'none', background: (isPlaying && playDirection === 'backward') ? 'var(--panel-3)' : 'transparent',
@@ -651,7 +685,7 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
                 </button>
                 <button
                   onClick={() => handlePlayControl(isPlaying && playDirection === 'forward' ? 'pause' : 'play-forward')}
-                  title="Play Forwards"
+                  title={isPlaying && playDirection === 'forward' ? (isRtl ? 'השהה' : 'Pause') : (isRtl ? 'נגן קדימה' : 'Play Forwards')}
                   style={{
                     width: 32, height: 28, display: 'grid', placeItems: 'center',
                     border: 'none', background: (isPlaying && playDirection === 'forward') ? 'var(--panel-3)' : 'transparent',
@@ -665,7 +699,7 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
                 </button>
                 <button
                   onClick={() => handlePlayControl('jump-end')}
-                  title="Jump to End"
+                  title={isRtl ? 'קפוץ לסוף' : 'Jump to End'}
                   style={{
                     width: 32, height: 28, display: 'grid', placeItems: 'center',
                     border: 'none', background: 'transparent', color: 'var(--ink-3)',
@@ -678,7 +712,7 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
 
               <div style={{ width: 1, background: 'var(--hairline)', margin: '0 4px', height: 20 }} />
 
-              <div style={{ display: 'flex', gap: 3, background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 8, padding: 3 }}>
+              <div style={{ display: 'flex', gap: 3, background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 8, padding: 3, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
                 {(['1×', '2×', '8×', '64×'] as Speed[]).map((s) => (
                   <button
                     key={s}
@@ -698,18 +732,18 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
           </div>
 
           {/* Chart & Timeline Card */}
-          <div className="bi-card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>
-                RISK SCORE · {usingRealData ? `${sorted[0]?.snapshot_date?.slice(0, 4)} → TODAY` : '1900 → TODAY'}
-              </div>
+          <div className="bi-card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowX: isMobile ? 'auto' : 'visible' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+              <h2 className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>
+                {t('replay.riskScoreLabel', { range: usingRealData ? `${sorted[0]?.snapshot_date?.slice(0, 4)} → ${isRtl ? 'היום' : 'TODAY'}` : `1900 → ${isRtl ? 'היום' : 'TODAY'}` })}
+              </h2>
               {isPlaying && playDirection === 'backward' && (
                 <motion.span
                   animate={{ opacity: [1, 0.4, 1] }}
                   transition={{ repeat: Infinity, duration: 1 }}
                   style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--t-8)', fontWeight: 600, letterSpacing: '0.08em' }}
                 >
-                  ◀ REWIND
+                  {t('replay.rewind')}
                 </motion.span>
               )}
             </div>
@@ -722,6 +756,7 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
               onTouchMove={handleTouchMove}
               style={{
                 width: '100%',
+                minWidth: isMobile ? 560 : undefined,
                 aspectRatio: '1280 / 360',
                 position: 'relative',
                 cursor: isPlaying ? 'pointer' : 'ew-resize',
@@ -785,13 +820,13 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
                 })()}
 
                 {[0, 25, 50, 75, 100].map((m, i) => (
-                  <text key={m} x="8" y={20 + (4 - i) * 65 + 4} fontSize="10" fontFamily="var(--font-mono)" fill="var(--ink-4)">{m}</text>
+                  <text key={m} x={isRtl ? '1272' : '8'} y={20 + (4 - i) * 65 + 4} fontSize="10" fontFamily="var(--font-mono)" fill="var(--ink-4)" textAnchor={isRtl ? 'end' : 'start'}>{m}</text>
                 ))}
               </svg>
             </div>
 
             {/* Timeline Year Labels Scale */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 4px', marginTop: 10, borderTop: '1px solid var(--hairline)', paddingTop: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 4px', marginTop: 10, borderTop: '1px solid var(--hairline)', paddingTop: 10, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
               {scrubYears.map(y => (
                 <div key={y} className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', userSelect: 'none' }}>
                   {y}
@@ -802,31 +837,48 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
             {/* Financial News Wire Panel */}
             {(() => {
               const activeKey = `${displayYear}-${displayedValues.date.slice(5, 7)}`;
-              const news = MONTHLY_EVENTS[activeKey] || YEARLY_BACKDROPS[parseInt(displayYear, 10)] || {
+              
+              // Retrieve baseline news object
+              const newsBase = MONTHLY_EVENTS[activeKey] || YEARLY_BACKDROPS[parseInt(displayYear, 10)] || {
                 title: "Stable Market Regime",
                 desc: "No major systemic crises recorded. General market parameters remain within normal statistical bounds.",
                 impact: "STABLE",
                 imgUrl: "/images/news/news-stable.jpg"
               };
+
+              // Localize dynamically
+              const news = {
+                ...newsBase,
+                title: activeKey in MONTHLY_EVENTS 
+                  ? t(`replay.monthlyEvents.${activeKey}.title`)
+                  : (parseInt(displayYear, 10) in YEARLY_BACKDROPS 
+                    ? t(`replay.yearlyEvents.${displayYear}.title`) 
+                    : (isRtl ? 'משטר שוק יציב' : 'Stable Market Regime')),
+                desc: activeKey in MONTHLY_EVENTS
+                  ? t(`replay.monthlyEvents.${activeKey}.desc`)
+                  : (parseInt(displayYear, 10) in YEARLY_BACKDROPS
+                    ? t(`replay.yearlyEvents.${displayYear}.desc`)
+                    : (isRtl ? 'לא נרשמו משברים מערכתיים משמעותיים. מדדי השוק הכלליים נותרו בטווחים סטטיסטיים נורמליים.' : 'No major systemic crises recorded. General market parameters remain within normal statistical bounds.')),
+              };
               
               return (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', textAlign: isRtl ? 'right' : 'left' }}>
                   <div style={{ height: '1px', background: 'var(--hairline)', margin: '20px 0 16px 0' }} />
                   
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-                    <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.08em' }}>HISTORICAL NEWS WIRE</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+                    <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.08em' }}>{isRtl ? 'מבזק חדשות היסטורי' : 'HISTORICAL NEWS WIRE'}</span>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: getImpactColor(news.impact), animation: 'pulseGlow 1.5s infinite' }} />
                   </div>
 
-                  <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', background: 'var(--panel-2)', border: '1px solid var(--hairline)', padding: 14, borderRadius: 8 }}>
+                  <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', background: 'var(--panel-2)', border: '1px solid var(--hairline)', padding: 14, borderRadius: 8, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
                     {!imgError ? (
-                      <img
+                      <Image
                         src={news.imgUrl}
                         alt={news.title}
+                        width={80}
+                        height={80}
                         onError={() => setImgError(true)}
                         style={{
-                          width: 80,
-                          height: 80,
                           borderRadius: 6,
                           objectFit: 'cover',
                           border: '1px solid var(--hairline-2)',
@@ -858,11 +910,11 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
                         </span>
                       </div>
                     )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 6 }}>
-                        <h4 className="mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-1)', margin: 0, letterSpacing: '-0.01em' }}>
+                    <div style={{ flex: 1, minWidth: 0, textAlign: isRtl ? 'right' : 'left' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 6, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+                        <h3 className="mono" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink-1)', margin: 0, letterSpacing: '-0.01em' }}>
                           {news.title.toUpperCase()}
-                        </h4>
+                        </h3>
                         <span
                           className="mono"
                           style={{
@@ -875,10 +927,10 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
                             letterSpacing: '0.04em',
                           }}
                         >
-                          {news.impact} IMPACT
+                          {getLocalizedImpact(news.impact)}
                         </span>
                       </div>
-                      <p style={{ fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.45, margin: '6px 0 0 0' }}>
+                      <p style={{ fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.45, margin: '6px 0 0 0', textWrap: 'pretty' }}>
                         {news.desc}
                       </p>
                     </div>
@@ -894,8 +946,8 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
           
           {/* Time Dial Card */}
           <div className="bi-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-            <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.10em', alignSelf: 'flex-start', marginBottom: 14 }}>
-              TIME DIAL & REAL-TIME STATE
+            <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.10em', alignSelf: isRtl ? 'flex-end' : 'flex-start', marginBottom: 14 }}>
+              {isRtl ? 'מד זמן ומצב השוק' : 'TIME DIAL & REAL-TIME STATE'}
             </div>
 
             {/* Rotating Wheel Plate */}
@@ -904,6 +956,8 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
                 position: 'relative',
                 width: 250,
                 height: 250,
+                transform: isMobile ? 'scale(0.72)' : undefined,
+                transformOrigin: 'center center',
                 borderRadius: '50%',
                 background: 'radial-gradient(circle at 50% 50%, #15151b 0%, #0d0d11 60%, #08080a 100%)',
                 boxShadow: `
@@ -1042,7 +1096,7 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
                 />
 
                 <div className="mono" style={{ fontSize: 9.5, color: tempVar(displayScore), letterSpacing: '0.08em', marginBottom: 2, fontWeight: 600 }}>
-                  {riskTier(displayScore).tier}
+                  {t('riskTiers.' + riskTier(displayScore).tier.toLowerCase() + '.tier').toUpperCase()}
                 </div>
 
                 <div
@@ -1059,9 +1113,9 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
                   <OdometerText text={displayScore.toString()} direction={playDirection} />
                 </div>
 
-                <div className="mono" style={{ fontSize: 11, color: 'var(--ink-2)', fontWeight: 500, marginTop: 4, letterSpacing: '0.02em' }}>
+                <div className="mono" style={{ fontSize: 11, color: 'var(--ink-2)', fontWeight: 500, marginTop: 4, letterSpacing: '0.02em', flexDirection: isRtl ? 'row-reverse' : 'row', display: 'flex', gap: 4 }}>
                   <OdometerText text={displayMonth.toUpperCase()} direction={playDirection} />
-                  <span style={{ margin: '0 4px', color: 'var(--ink-4)' }}>·</span>
+                  <span style={{ color: 'var(--ink-4)' }}>·</span>
                   <OdometerText text={displayYear} direction={playDirection} />
                 </div>
               </div>
@@ -1069,21 +1123,21 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
           </div>
 
           {/* Category Breakdown Panel */}
-          <div className="bi-card" style={{ padding: '20px 24px' }}>
+          <div className="bi-card" style={{ padding: '20px 24px', textAlign: isRtl ? 'right' : 'left' }}>
             <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.10em', marginBottom: 14 }}>
-              SUB-COMPONENTS PERCENTILES
+              {isRtl ? 'אחוזוני מדדי משנה' : 'SUB-COMPONENTS PERCENTILES'}
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[
-                { label: 'VALUATIONS (VAL)', score: valScore },
-                { label: 'MACRO STRESS (MAC)', score: macScore },
-                { label: 'LEVERAGE & CREDIT (LEV)', score: levScore },
-                { label: 'SENTIMENT TRENDS (SEN)', score: senScore },
-                { label: 'CONCENTRATION (CON)', score: conScore },
+                { id: 'valuation', label: isRtl ? `${t('indicators.rowLabels.valuation.name')} (${ABBR.valuation})` : 'VALUATIONS (VAL)', score: valScore },
+                { id: 'macro_stress', label: isRtl ? `${t('indicators.rowLabels.macro_stress.name')} (${ABBR.macro_stress})` : 'MACRO STRESS (MAC)', score: macScore },
+                { id: 'leverage_credit', label: isRtl ? `${t('indicators.rowLabels.leverage_credit.name')} (${ABBR.leverage_credit})` : 'LEVERAGE & CREDIT (LEV)', score: levScore },
+                { id: 'sentiment', label: isRtl ? `${t('indicators.rowLabels.sentiment.name')} (${ABBR.sentiment})` : 'SENTIMENT TRENDS (SEN)', score: senScore },
+                { id: 'concentration', label: isRtl ? `${t('indicators.rowLabels.concentration.name')} (${ABBR.concentration})` : 'CONCENTRATION (CON)', score: conScore },
               ].map((c) => (
-                <div key={c.label}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                <div key={c.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
                     <span className="mono" style={{ fontSize: 9.5, color: 'var(--ink-3)', letterSpacing: '0.04em' }}>{c.label}</span>
                     <span className="mono tnum" style={{ fontSize: 11, color: tempVar(c.score), fontWeight: 600 }}>{c.score.toFixed(0)}</span>
                   </div>

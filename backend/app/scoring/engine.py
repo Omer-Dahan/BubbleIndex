@@ -33,7 +33,6 @@ FRED_SERIES_MAP = {
     "VIX":               "VIXCLS",
     "YIELD_2Y":          "DGS2",
     "YIELD_10Y":         "DGS10",
-    "WILSHIRE5000":      "WILL5000PR",
     "GDP":               "GDP",
     "BUFFETT_INDICATOR": "DDDM01USA156NWDB",
     "UNEMPLOYMENT":      "UNRATE",
@@ -130,7 +129,7 @@ class ScoringEngine:
         data["WILSHIRE5000"] = self._load_from_db("SP500", days=400)
         # New indicators
         data["SHILLER_CAPE"] = self._load_from_db("shiller_cape", days=60)
-        data["SP500_PS"] = self._load_from_db("sp500_ps", days=60)
+        data["SP500_PS"] = self._load_from_db("sp500_ps", days=400)
         data["CPI_YOY"] = self._load_from_db("cpi_yoy", days=60)
         data["MARGIN_DEBT_YOY"] = self._load_from_db("margin_debt_yoy", days=500)
         data["IPO_VOLUME_YOY"] = self._load_from_db("ipo_volume_yoy", days=600)

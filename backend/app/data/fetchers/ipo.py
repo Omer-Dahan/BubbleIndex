@@ -1,4 +1,6 @@
+import calendar
 import logging
+import re
 from datetime import date
 
 import pandas as pd
@@ -9,17 +11,13 @@ from app.config import Settings
 
 logger = logging.getLogger(__name__)
 
-# Ritter IPO data — annual counts 1975+
-# Primary: direct CSV endpoint derived from Ritter's public Excel files
-# Fallback: stockanalysis.com annual table
-RITTER_CSV_URL = "https://site.warrington.ufl.edu/ritter/files/IPOs2024.xlsx"
 STOCKANALYSIS_URL = "https://stockanalysis.com/ipos/statistics/"
 
-# Hardcoded Ritter annual IPO counts (1975–2023) as bootstrap fallback.
-# Source: Jay R. Ritter, University of Florida (public dataset).
-# Updated manually when new annual data is released.
+# Ritter annual IPO counts (1975–2025).
+# Sources: Jay R. Ritter, University of Florida (public dataset).
+# 2025 value is estimated (~160) pending Ritter's official annual release.
 RITTER_HARDCODED: dict[int, int] = {
-    1975: 14, 1976: 34, 1977: 40, 1978: 42, 1979: 103,
+    1975: 14,  1976: 34,  1977: 40,  1978: 42,  1979: 103,
     1980: 259, 1981: 438, 1982: 198, 1983: 848, 1984: 516,
     1985: 507, 1986: 953, 1987: 630, 1988: 435, 1989: 371,
     1990: 276, 1991: 367, 1992: 509, 1993: 707, 1994: 603,
@@ -29,6 +27,7 @@ RITTER_HARDCODED: dict[int, int] = {
     2010: 154, 2011: 125, 2012: 128, 2013: 222, 2014: 275,
     2015: 170, 2016: 105, 2017: 160, 2018: 192, 2019: 232,
     2020: 480, 2021: 1035, 2022: 181, 2023: 154, 2024: 180,
+    2025: 160,  # estimated — replace with Ritter official figure when available
 }
 
 
@@ -38,11 +37,6 @@ class IPOFetcher:
         self.settings = settings
 
     def fetch_ipo_yoy_history(self) -> pd.DataFrame:
-        """
-        Returns monthly DataFrame with ipo_volume_yoy values.
-        YoY = (this_year_count - last_year_count) / last_year_count * 100.
-        Monthly rows all share the same annual value (last day of each month).
-        """
         cache_key = "ipo:volume_yoy_history"
         cached = self.cache.get(cache_key)
         if cached:
@@ -64,12 +58,52 @@ class IPOFetcher:
         return pd.DataFrame({"date": [], "value": []})
 
     def _get_annual_counts(self) -> dict[int, int]:
-        return RITTER_HARDCODED.copy()
+        base = RITTER_HARDCODED.copy()
+        live = self._fetch_from_stockanalysis()
+        if live:
+            # Live data takes precedence for years it covers
+            base.update(live)
+            logger.info("ipo: merged live data for years: %s", sorted(live.keys()))
+        return base
+
+    def _fetch_from_stockanalysis(self) -> dict[int, int]:
+        try:
+            resp = requests.get(
+                STOCKANALYSIS_URL,
+                timeout=20,
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            logger.warning("stockanalysis.com IPO fetch failed: %s", e)
+            return {}
+
+        # Table rows: <td>2025</td><td>NNN</td> (various formats)
+        pattern = re.compile(
+            r"<td[^>]*>\s*(\d{4})\s*</td>\s*<td[^>]*>\s*([\d,]+)\s*</td>",
+            re.IGNORECASE,
+        )
+        results: dict[int, int] = {}
+        current_year = date.today().year
+        for m in pattern.finditer(resp.text):
+            try:
+                year = int(m.group(1))
+                count = int(m.group(2).replace(",", ""))
+                if 1975 <= year <= current_year and count > 0:
+                    results[year] = count
+            except ValueError:
+                continue
+
+        if results:
+            logger.info("stockanalysis.com: parsed IPO counts for %d years", len(results))
+        else:
+            logger.warning("stockanalysis.com: no IPO counts parsed (HTML may have changed)")
+        return results
 
     def _annual_to_monthly_yoy(self, annual: dict[int, int]) -> list[dict]:
-        import calendar
         rows = []
         years = sorted(annual.keys())
+        today = date.today()
         for i, year in enumerate(years):
             if i == 0:
                 continue
@@ -81,6 +115,6 @@ class IPOFetcher:
             for month in range(1, 13):
                 last_day = calendar.monthrange(year, month)[1]
                 d = date(year, month, last_day)
-                if d <= date.today():
+                if d <= today:
                     rows.append({"date": d, "value": round(yoy, 2)})
         return rows

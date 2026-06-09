@@ -28,4 +28,5 @@ export const api = {
   getSnapshotByDate: (dateStr: string, init?: any) =>
     apiFetch<SnapshotSummary>(`/api/v1/history/snapshots/${dateStr}`, init),
   getCrisisProfiles: (init?: any) => apiFetch<any[]>('/api/v1/crisis/profiles', init),
+  getHealth: () => apiFetch<{ status: string; ready: boolean }>('/health'),
 };

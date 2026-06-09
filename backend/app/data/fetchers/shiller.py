@@ -23,7 +23,7 @@ class ShillerFetcher:
         return self._fetch_multpl_table(
             url=CAPE_URL,
             cache_key="multpl:shiller_cape_history",
-            valid_range=(5.0, 60.0),
+            valid_range=(5.0, 100.0),
             series_name="shiller_cape",
         )
 

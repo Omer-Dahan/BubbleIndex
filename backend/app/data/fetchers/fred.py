@@ -13,20 +13,21 @@ FRED_SERIES = {
     "VIX":               "VIXCLS",
     "YIELD_2Y":          "DGS2",
     "YIELD_10Y":         "DGS10",
-    "WILSHIRE5000":      "WILL5000PR",
+    # WILL5000IND / WILL5000PR removed — both return 400 from FRED. Scoring engine uses SP500 as proxy.
     "GDP":               "GDP",
     "BUFFETT_INDICATOR": "DDDM01USA156NWDB",
     "UNEMPLOYMENT":      "UNRATE",
     "FED_FUNDS":         "FEDFUNDS",
     "HY_SPREAD":         "BAMLH0A0HYM2",
     "CPI":               "CPIAUCSL",
-    "MARGIN_DEBT":       "BOGZ1FL663067003Q",
+    # BOGZ1FL663067003Q removed — returns 502 from FRED (series discontinued ca. 2020).
+    # Existing margin_debt_yoy derived points in DB are preserved for percentile history.
 }
 
 # Series that are quarterly/annual — cannot request daily frequency
 LOW_FREQUENCY_SERIES = {
-    "GDP", "DDDM01USA156NWDB", "UNRATE", "FEDFUNDS", "WILL5000PR", "SP500PE",
-    "CPIAUCSL", "BOGZ1FL663067003Q",
+    "GDP", "DDDM01USA156NWDB", "UNRATE", "FEDFUNDS", "SP500PE",
+    "CPIAUCSL",
 }
 
 # max staleness in days per series
@@ -34,7 +35,7 @@ STALENESS_DAYS = {
     "VIXCLS": 5, "DGS2": 5, "DGS10": 5, "FEDFUNDS": 40, "UNRATE": 40,
     "GDP": 100, "DDDM01USA156NWDB": 400, "BAMLH0A0HYM2": 5,
     "SP500": 5, "WILL5000IND": 5, "SP500PE": 40,
-    "CPIAUCSL": 40, "BOGZ1FL663067003Q": 100,
+    "CPIAUCSL": 40,
 }
 
 BASE_URL = "https://api.stlouisfed.org/fred/series/observations"

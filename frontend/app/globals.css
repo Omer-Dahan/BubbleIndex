@@ -2,8 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Geist+Mono:wght@400;500&family=Barlow+Condensed:wght@200;300;500;600&display=swap');
-
 :root {
   --bg: #0a0a0c;
   --panel: #111114;
@@ -32,10 +30,6 @@
   --pad-card: 24px;
   --gap-grid: 20px;
   --pad-screen: 32px;
-
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', monospace;
-  --font-display: 'Barlow Condensed', 'Inter', sans-serif;
 }
 
 [data-density="compact"] {
@@ -98,6 +92,22 @@
   --t-7: oklch(0.50 0.21 316);
   --t-8: oklch(0.46 0.22 320);
   --t-9: oklch(0.42 0.23 325);
+}
+
+@media (max-width: 767px) {
+  :root {
+    --pad-card: 16px;
+    --gap-grid: 12px;
+    --pad-screen: 16px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  :root {
+    --pad-card: 20px;
+    --gap-grid: 16px;
+    --pad-screen: 20px;
+  }
 }
 
 html, body {
