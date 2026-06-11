@@ -31,7 +31,12 @@ class BaseFetcher(ABC):
             try:
                 resp = requests.get(url, params=params, headers=headers, timeout=30)
                 if resp.status_code == 429:
-                    wait = int(resp.headers.get("Retry-After", 60))
+                    # Cap the wait: this may run inside a request thread
+                    try:
+                        wait = int(resp.headers.get("Retry-After", "60"))
+                    except ValueError:
+                        wait = 60
+                    wait = min(max(wait, 1), 60)
                     logger.warning("Rate limited, waiting %ds", wait)
                     time.sleep(wait)
                     continue

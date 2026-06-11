@@ -1,20 +1,15 @@
-from fastapi import APIRouter, Request, HTTPException
-from app.scoring.crisis_similarity import CRISIS_PROFILES, compute_similarities
-import json
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.api.deps import get_engine
+from app.scoring.crisis_similarity import CRISIS_PROFILES
+from app.scoring.engine import ScoringEngine
 
 router = APIRouter(prefix="/crisis", tags=["crisis"])
 
 
-def _get_engine(request: Request):
-    engine = getattr(request.app.state, "scoring_engine", None)
-    if engine is None:
-        raise HTTPException(503, "Scoring engine not ready")
-    return engine
-
-
 @router.get("/similarity")
-def get_similarity(request: Request):
-    snap = _get_engine(request).get_latest_snapshot()
+def get_similarity(engine: ScoringEngine = Depends(get_engine)):
+    snap = engine.get_latest_snapshot()
     if snap is None:
         raise HTTPException(404, "No snapshots yet")
     return snap.get("crisis_similarities", [])

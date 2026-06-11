@@ -127,17 +127,11 @@ def seed_concentration_history(session: Session) -> int:
         logger.info("concentration_seed: already seeded (%d rows before 2026), skipping", existing)
         return 0
 
+    import calendar
     rows = []
     for year, month, value in HISTORICAL_CONCENTRATION:
         # Use last day of month as the canonical date
-        if month == 12:
-            d = date(year, 12, 31)
-        else:
-            d = date(year, month + 1, 1).__class__(year, month, 28)  # safe last-ish day
-            # Use actual end-of-month: day 28 is always valid; push to next month minus 1 day
-            import calendar
-            last_day = calendar.monthrange(year, month)[1]
-            d = date(year, month, last_day)
+        d = date(year, month, calendar.monthrange(year, month)[1])
         rows.append({
             "series_id": SERIES_ID,
             "source": "static_seed",

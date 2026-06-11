@@ -1,8 +1,11 @@
-from datetime import date, timedelta
-from typing import Optional
+from datetime import date
 
 from fastapi import APIRouter, Depends, Request, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_db, require_admin
+from app.db.models.risk_snapshot import RiskSnapshot
 from app.core.limiter import limiter
 
 router = APIRouter(prefix="/history", tags=["history"])
@@ -19,38 +22,52 @@ class SnapshotSummary(BaseModel):
     concentration_score: float
 
 
-def _get_engine(request: Request):
-    engine = getattr(request.app.state, "scoring_engine", None)
-    if engine is None:
-        raise HTTPException(503, "Scoring engine not ready")
-    return engine
+def _row_to_summary(s: RiskSnapshot) -> SnapshotSummary:
+    return SnapshotSummary(
+        snapshot_date=str(s.snapshot_date),
+        composite_score=s.composite_score,
+        risk_label=s.risk_label,
+        valuation_score=s.valuation_score if s.valuation_score is not None else 50.0,
+        macro_stress_score=s.macro_stress_score if s.macro_stress_score is not None else 50.0,
+        leverage_credit_score=s.leverage_credit_score if s.leverage_credit_score is not None else 50.0,
+        sentiment_score=s.sentiment_score if s.sentiment_score is not None else 50.0,
+        concentration_score=s.concentration_score if s.concentration_score is not None else 50.0,
+    )
 
 
 @router.get("/snapshots", response_model=list[SnapshotSummary])
 def get_snapshots(
-    request: Request,
     start_date: date = Query(default=None),
     end_date: date = Query(default=None),
+    session: Session = Depends(get_db),
 ):
     if end_date is None:
         end_date = date.today()
     if start_date is None:
         start_date = date(1990, 1, 1)
 
-    snaps = _get_engine(request).get_snapshots(start_date, end_date)
-    return [_snap_to_summary(s) for s in snaps]
+    rows = (
+        session.query(RiskSnapshot)
+        .filter(RiskSnapshot.snapshot_date >= start_date, RiskSnapshot.snapshot_date <= end_date)
+        .order_by(RiskSnapshot.snapshot_date)
+        .all()
+    )
+    return [_row_to_summary(r) for r in rows]
 
 
 @router.get("/snapshots/{snapshot_date}", response_model=SnapshotSummary)
 def get_snapshot_by_date(
     snapshot_date: date,
-    request: Request,
+    session: Session = Depends(get_db),
 ):
-    snaps = _get_engine(request).get_snapshots(snapshot_date, snapshot_date)
-    if not snaps:
-        from fastapi import HTTPException
+    row = (
+        session.query(RiskSnapshot)
+        .filter(RiskSnapshot.snapshot_date == snapshot_date)
+        .first()
+    )
+    if row is None:
         raise HTTPException(status_code=404, detail=f"No snapshot found for {snapshot_date}")
-    return _snap_to_summary(snaps[0])
+    return _row_to_summary(row)
 
 
 class RecomputeResult(BaseModel):
@@ -59,27 +76,23 @@ class RecomputeResult(BaseModel):
     skipped: int
 
 
-@router.post("/recompute", response_model=RecomputeResult)
+@router.post("/recompute", response_model=RecomputeResult, dependencies=[Depends(require_admin)])
 @limiter.limit("2/minute")
-def recompute_snapshots(request: Request):
+def recompute_snapshots(request: Request, session: Session = Depends(get_db)):
     """Seed historical concentration data and force-recompute all existing snapshots."""
-    session = getattr(request.app.state, "db_session", None)
-    if session is None:
-        raise HTTPException(503, "DB session not available")
-
     from app.data.loaders.concentration_seed import seed_concentration_history
     from app.scoring.backfill_engine import HistoricalBackfillEngine
-    from app.db.models.risk_snapshot import RiskSnapshot
 
     # 1. Seed concentration history
     seeded = seed_concentration_history(session)
 
     # 2. Warm percentile normalizer with new data
-    scoring_engine = _get_engine(request)
-    try:
-        scoring_engine.normalizer.warm_cache(["top10_concentration"])
-    except Exception:
-        pass
+    normalizer = getattr(request.app.state, "normalizer", None)
+    if normalizer is not None:
+        try:
+            normalizer.warm_cache(["top10_concentration"])
+        except Exception:
+            pass
 
     # 3. Force-recompute all existing snapshots
     backfill = HistoricalBackfillEngine(session)
@@ -97,21 +110,8 @@ def recompute_snapshots(request: Request):
                 recomputed += 1
             else:
                 skipped += 1
-        except Exception as e:
+        except Exception:
+            session.rollback()
             skipped += 1
 
     return RecomputeResult(seeded_rows=seeded, recomputed=recomputed, skipped=skipped)
-
-
-def _snap_to_summary(s: dict) -> SnapshotSummary:
-    cats = s.get("categories", [])
-    return SnapshotSummary(
-        snapshot_date=s["snapshot_date"],
-        composite_score=s["composite_score"],
-        risk_label=s["risk_label"],
-        valuation_score=cats[0]["score"] if len(cats) > 0 else 50.0,
-        macro_stress_score=cats[1]["score"] if len(cats) > 1 else 50.0,
-        leverage_credit_score=cats[2]["score"] if len(cats) > 2 else 50.0,
-        sentiment_score=cats[3]["score"] if len(cats) > 3 else 50.0,
-        concentration_score=cats[4]["score"] if len(cats) > 4 else 50.0,
-    )

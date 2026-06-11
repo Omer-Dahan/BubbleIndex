@@ -41,11 +41,19 @@ export default function ScreenIndicators({ data, snapshots, palette, onCyclePale
     [...snapshots].sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date)),
   [snapshots]);
 
+  // Downsample to one snapshot per calendar month (last snapshot of each month)
+  // so the heatmap columns truly represent months, not raw daily snapshots.
+  const monthly = useMemo(() => {
+    const byMonth = new Map<string, SnapshotSummary>();
+    for (const s of sorted) byMonth.set(s.snapshot_date.slice(0, 7), s);
+    return Array.from(byMonth.values());
+  }, [sorted]);
+
   // Build heatmap from real snapshot history; fall back to simulated if insufficient data
   const grid = useMemo(() => INDICATORS.map((ind, i) => {
-    const last24 = sorted.slice(-MONTHS);
+    const last24 = monthly.slice(-MONTHS);
     if (last24.length >= 4) {
-      // Pad left with the oldest value if fewer than MONTHS snapshots
+      // Pad left with the oldest value if fewer than MONTHS months
       const row = last24.map(s => (s[ind.snapshotKey as keyof SnapshotSummary] as number) / 100);
       while (row.length < MONTHS) row.unshift(row[0]);
       return row.slice(-MONTHS);
@@ -58,9 +66,9 @@ export default function ScreenIndicators({ data, snapshots, palette, onCyclePale
       const drift = (j / MONTHS) * 0.2;
       return Math.max(0.05, Math.min(0.98, base + drift + (r() - 0.5) * 0.18));
     });
-  }), [data, sorted]);
+  }), [data, monthly]);
 
-  const usingRealData = sorted.length >= 4;
+  const usingRealData = monthly.length >= 4;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)', direction: isRtl ? 'rtl' : 'ltr' }}>
@@ -131,8 +139,8 @@ export default function ScreenIndicators({ data, snapshots, palette, onCyclePale
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <div className="mono" style={{ display: 'grid', gridTemplateColumns: `repeat(${MONTHS}, 1fr)`, gap: 3, fontSize: 9, color: 'var(--ink-4)', marginBottom: 4, letterSpacing: '0.02em', direction: 'ltr' }}>
                       {Array.from({ length: MONTHS }).map((_, j) => {
-                        if (usingRealData && sorted.length >= MONTHS) {
-                          const snap = sorted[sorted.length - MONTHS + j];
+                        if (usingRealData && monthly.length >= MONTHS) {
+                          const snap = monthly[monthly.length - MONTHS + j];
                           const mo = snap?.snapshot_date?.slice(5, 7);
                           return <div key={j} style={{ textAlign: 'center' }}>{j % 3 === 0 && mo ? mo : ''}</div>;
                         }
@@ -146,8 +154,8 @@ export default function ScreenIndicators({ data, snapshots, palette, onCyclePale
                       style={{ display: 'grid', gridTemplateColumns: `repeat(${MONTHS}, 1fr)`, gap: 3, direction: 'ltr' }}
                     >
                       {grid[i].map((v, j) => {
-                        const dateLabel = usingRealData && sorted[sorted.length - MONTHS + j]
-                          ? sorted[sorted.length - MONTHS + j].snapshot_date
+                        const dateLabel = usingRealData && monthly[monthly.length - MONTHS + j]
+                          ? monthly[monthly.length - MONTHS + j].snapshot_date
                           : (isRtl ? `ח${MONTHS - j}` : `M${MONTHS - j}`);
                         const localizedName = t(`indicators.rowLabels.${INDICATORS[i].key}.name`);
                         const tooltipText = `${localizedName} · ${dateLabel} · ${t('common.score')} ${Math.round(v * 100)}`;
@@ -191,8 +199,8 @@ export default function ScreenIndicators({ data, snapshots, palette, onCyclePale
             <div style={{ gridColumn: 2, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
               <div className="mono" style={{ display: 'grid', gridTemplateColumns: `repeat(${MONTHS}, 1fr)`, gap: 3, fontSize: 10, color: 'var(--ink-4)', marginBottom: 6, letterSpacing: '0.04em', direction: 'ltr' }}>
                 {Array.from({ length: MONTHS }).map((_, j) => {
-                  if (usingRealData && sorted.length >= MONTHS) {
-                    const snap = sorted[sorted.length - MONTHS + j];
+                  if (usingRealData && monthly.length >= MONTHS) {
+                    const snap = monthly[monthly.length - MONTHS + j];
                     const mo = snap?.snapshot_date?.slice(5, 7);
                     return <div key={j} style={{ textAlign: 'center' }}>{j % 3 === 0 && mo ? mo : ''}</div>;
                   }
@@ -208,8 +216,8 @@ export default function ScreenIndicators({ data, snapshots, palette, onCyclePale
                   style={{ flex: 1, display: 'grid', gridTemplateColumns: `repeat(${MONTHS}, 1fr)`, gap: 3, marginBottom: 3, direction: 'ltr' }}
                 >
                   {row.map((v, j) => {
-                    const dateLabel = usingRealData && sorted[sorted.length - MONTHS + j]
-                      ? sorted[sorted.length - MONTHS + j].snapshot_date
+                    const dateLabel = usingRealData && monthly[monthly.length - MONTHS + j]
+                      ? monthly[monthly.length - MONTHS + j].snapshot_date
                       : (isRtl ? `ח${MONTHS - j}` : `M${MONTHS - j}`);
                     const localizedName = t(`indicators.rowLabels.${INDICATORS[i].key}.name`);
                     const tooltipText = `${localizedName} · ${dateLabel} · ${t('common.score')} ${Math.round(v * 100)}`;
@@ -230,7 +238,7 @@ export default function ScreenIndicators({ data, snapshots, palette, onCyclePale
             </div>
 
             {/* Current values */}
-            <div style={{ gridColumn: isRtl ? 1 : 3, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', borderRight: isRtl ? '1px solid var(--hairline)' : 'none', borderLeft: isRtl ? 'none' : '1px solid var(--hairline)', paddingRight: i => 16 ? 16 : 0, paddingLeft: i => 16 ? 0 : 16 } as React.CSSProperties}>
+            <div style={{ gridColumn: isRtl ? 1 : 3, display: 'flex', flexDirection: 'column', justifyContent: 'space-around', borderRight: isRtl ? '1px solid var(--hairline)' : 'none', borderLeft: isRtl ? 'none' : '1px solid var(--hairline)', paddingRight: isRtl ? 16 : 0, paddingLeft: isRtl ? 0 : 16 } as React.CSSProperties}>
               {INDICATORS.map((ind, i) => {
                 const last = grid[i][grid[i].length - 1];
                 const prev = grid[i][Math.max(0, grid[i].length - 2)];

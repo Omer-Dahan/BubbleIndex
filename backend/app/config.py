@@ -1,10 +1,15 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
+import os
+from pathlib import Path
 
 
 class Settings(BaseSettings):
     fred_api_key: str = ""
     finnhub_api_key: str = ""
+    # Required (via X-Admin-Key header) for mutating endpoints (/refresh, /recompute).
+    # When empty, those endpoints are disabled.
+    admin_api_key: str = ""
     database_url: str = "sqlite:///./data/bubble_index.db"
     cache_dir: str = "./data/cache"
     fred_cache_ttl_hours: int = 6
@@ -16,10 +21,10 @@ class Settings(BaseSettings):
     debug: bool = False
     cors_origins: List[str] = ["http://localhost:3000"]
     daily_sync_hour_utc: int = 18
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_file=os.path.join(Path(__file__).resolve().parent.parent, ".env"),
+        extra="ignore"
+    )
 
 
 _settings: Settings | None = None

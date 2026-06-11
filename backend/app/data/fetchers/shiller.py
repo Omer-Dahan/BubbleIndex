@@ -11,7 +11,6 @@ from app.config import Settings
 logger = logging.getLogger(__name__)
 
 CAPE_URL = "https://www.multpl.com/shiller-pe/table/by-month"
-PS_URL = "https://www.multpl.com/s-p-500-price-to-sales/table/by-month"
 
 
 class ShillerFetcher:
@@ -25,14 +24,6 @@ class ShillerFetcher:
             cache_key="multpl:shiller_cape_history",
             valid_range=(5.0, 100.0),
             series_name="shiller_cape",
-        )
-
-    def fetch_ps_history(self) -> pd.DataFrame:
-        return self._fetch_multpl_table(
-            url=PS_URL,
-            cache_key="multpl:sp500_ps_history",
-            valid_range=(0.1, 10.0),
-            series_name="sp500_ps",
         )
 
     def _fetch_multpl_table(
@@ -73,8 +64,9 @@ class ShillerFetcher:
         return pd.DataFrame({"date": [], "value": []})
 
     def _parse_table(self, html: str, valid_range: tuple[float, float]) -> list[dict]:
+        # <td[^>]*> tolerates class/attribute variants on multpl.com table cells
         pattern = re.compile(
-            r"<td>\s*([A-Za-z]+ \d{1,2},\s*\d{4})\s*</td>\s*<td>.*?([\d]+\.[\d]+)\s*</td>",
+            r"<td[^>]*>\s*([A-Za-z]+ \d{1,2},\s*\d{4})\s*</td>\s*<td[^>]*>.*?([\d]+\.[\d]+)\s*</td>",
             re.DOTALL | re.IGNORECASE,
         )
         lo, hi = valid_range

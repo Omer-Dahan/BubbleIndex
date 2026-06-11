@@ -82,15 +82,6 @@ class ScoringEngine:
         self.session.commit()
         return self._compute_and_save(today)
 
-    def get_snapshots(self, start: date, end: date) -> list[dict]:
-        snaps = (
-            self.session.query(RiskSnapshot)
-            .filter(RiskSnapshot.snapshot_date >= start, RiskSnapshot.snapshot_date <= end)
-            .order_by(RiskSnapshot.snapshot_date)
-            .all()
-        )
-        return [self._snapshot_to_dict(s) for s in snaps]
-
     def _load_from_db(self, series_id: str, days: int) -> pd.DataFrame:
         cutoff = date.today() - timedelta(days=days)
         rows = (
@@ -108,9 +99,13 @@ class ScoringEngine:
         end = today
         start = today - timedelta(days=90)
 
-        # Fetch daily FRED series (90-day window, file-cached)
+        # Fetch daily FRED series (90-day window, file-cached).
+        # Low-frequency series are loaded from the local DB below — skip their fetch.
+        db_overridden = {"UNEMPLOYMENT", "GDP", "BUFFETT_INDICATOR"}
         data = {}
         for name, fred_id in FRED_SERIES_MAP.items():
+            if name in db_overridden:
+                continue
             try:
                 data[name] = self.fred.fetch_series(fred_id, start, end)
             except Exception as e:
@@ -125,8 +120,6 @@ class ScoringEngine:
         if buffett_db.empty:
             buffett_db = self._load_from_db("DDDM01USA156NWDB", days=365 * 25)
         data["BUFFETT_INDICATOR"] = buffett_db
-        # WILL5000PR removed from FRED — use SP500 as Wilshire proxy for fallback
-        data["WILSHIRE5000"] = self._load_from_db("SP500", days=400)
         # New indicators
         data["SHILLER_CAPE"] = self._load_from_db("shiller_cape", days=60)
         data["SP500_PS"] = self._load_from_db("sp500_ps", days=400)
@@ -152,11 +145,7 @@ class ScoringEngine:
                 logger.info("Using top10_concentration from DB: %.1f", top10)
 
         # Compute raw indicators
-        buffett_val, buffett_src = compute_buffett_indicator(
-            data.get("BUFFETT_INDICATOR"),
-            data.get("WILSHIRE5000"),
-            data.get("GDP"),
-        )
+        buffett_val, buffett_src = compute_buffett_indicator(data.get("BUFFETT_INDICATOR"))
         yield_spread = compute_yield_curve_spread(data.get("YIELD_10Y", pd.DataFrame()), data.get("YIELD_2Y", pd.DataFrame()))
         vix_level = compute_vix_level(data.get("VIX", pd.DataFrame()))
         vix_trend = compute_vix_trend(data.get("VIX", pd.DataFrame()))

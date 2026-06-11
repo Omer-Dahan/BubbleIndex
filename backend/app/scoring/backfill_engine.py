@@ -46,8 +46,9 @@ INVERT_MAP: dict[str, bool] = {
 
 class HistoricalBackfillEngine:
     def __init__(self, session: Session):
+        from app.db.session import get_session_factory
         self.session = session
-        self.normalizer = PercentileNormalizer(session)
+        self.normalizer = PercentileNormalizer(get_session_factory())
 
     def compute_snapshot(self, reference_date: date, force: bool = False) -> dict | None:
         existing = (

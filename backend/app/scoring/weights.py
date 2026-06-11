@@ -48,20 +48,20 @@ WEIGHT_CONFIG = {
     },
 }
 
+# Upper-bound-exclusive bands; matches frontend riskTier() in lib/utils.ts
 RISK_BANDS = [
-    (0,  20,  "LOW",      "BUY"),
-    (21, 40,  "MODERATE", "HOLD"),
-    (41, 60,  "ELEVATED", "WATCH"),
-    (61, 80,  "HIGH",     "CAUTION"),
-    (81, 100, "BUBBLE",   "SELL"),
+    (20,  "LOW",      "BUY"),
+    (40,  "MODERATE", "HOLD"),
+    (60,  "ELEVATED", "WATCH"),
+    (80,  "HIGH",     "CAUTION"),
 ]
 
 
 def score_to_label(score: float) -> tuple[str, str]:
-    for lo, hi, label, verb in RISK_BANDS:
-        if lo <= score <= hi:
+    for hi, label, verb in RISK_BANDS:
+        if score < hi:
             return label, verb
-    return "EXTREME", "SELL"
+    return "BUBBLE", "SELL"
 
 
 ALL_INDICATOR_NAMES = [

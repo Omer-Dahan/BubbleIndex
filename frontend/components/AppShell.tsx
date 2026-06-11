@@ -127,7 +127,8 @@ export default function AppShell({ initialData, initialSnapshots, children }: Ap
   const handleRefresh = async () => {
     setLoading(true);
     try {
-      const d = await api.refreshScore();
+      // Re-read the latest snapshot; server-side refresh is admin-only
+      const d = await api.getLatestScore().catch(() => api.getRiskScore());
       setData(d);
       if (typeof window !== 'undefined') {
         localStorage.setItem('bubble_index_latest_data', JSON.stringify(d));

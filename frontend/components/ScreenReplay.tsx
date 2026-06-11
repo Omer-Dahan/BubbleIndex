@@ -782,7 +782,8 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
   // Generate Year labels positioned along the dial perimeter
   const dialYearLabels = useMemo(() => {
     const yearsArray: number[] = [];
-    const span = endYear - startYear;
+    // Guard: all snapshots may fall within a single year (fresh deployments)
+    const span = Math.max(1, endYear - startYear);
     // Aim for ~8 labels around the circle
     const step = Math.max(5, Math.ceil(span / 8 / 5) * 5); 
     const firstLabel = Math.ceil(startYear / step) * step;
@@ -810,14 +811,15 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
 
   // Dynamic rotation calculations
   // Keep the active year at 12 o'clock (0 degrees)
+  const yearSpan = Math.max(1, endYear - startYear);
   const currentYearVal = startYear + scrubFrac * (endYear - startYear);
-  const wheelRotation = -((currentYearVal - startYear) / (endYear - startYear)) * 360;
+  const wheelRotation = -((currentYearVal - startYear) / yearSpan) * 360;
 
   // Build SVG path
   const chartPath = useMemo(() => {
     if (chartPts.length < 2) return '';
     return chartPts.map((p, i) => {
-      const t = getPointTimeMs(p, p._i ?? (mobilePointsRange.startIdx + i));
+      const t = getPointTimeMs(p, (p as any)._i ?? (mobilePointsRange.startIdx + i));
       const x = ((t - timelineBounds.firstMs) / (timelineBounds.lastMs - timelineBounds.firstMs)) * 1280;
       const score = usingRealData ? (p as SnapshotSummary).composite_score : (p as { composite_score: number }).composite_score;
       const y = 20 + (1 - score / 100) * 260;
@@ -844,7 +846,7 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
     if (usingRealData && sorted.length >= 2) {
       const first = parseInt(sorted[0].snapshot_date.slice(0, 4));
       const last  = parseInt(sorted[sorted.length - 1].snapshot_date.slice(0, 4));
-      const step  = Math.ceil((last - first) / 5);
+      const step  = Math.max(1, Math.ceil((last - first) / 5));
       return Array.from({ length: 6 }, (_, i) => Math.min(first + i * step, last));
     }
     return [1900, 1925, 1950, 1975, 2000, 2025];
@@ -1323,7 +1325,7 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
 
                 {/* Ferris-Wheel Upright Year Labels */}
                 {dialYearLabels.map(y => {
-                  const labelAngle = ((y - startYear) / (endYear - startYear)) * 360;
+                  const labelAngle = ((y - startYear) / yearSpan) * 360;
                   // Compute text color based on proximity to active year
                   const isMatch = displayYear === y.toString();
 

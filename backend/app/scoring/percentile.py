@@ -3,7 +3,7 @@ from datetime import date, timedelta
 
 import numpy as np
 from scipy import stats
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
 
 from app.db.models.indicator_series import IndicatorSeries
 
@@ -11,8 +11,14 @@ logger = logging.getLogger(__name__)
 
 
 class PercentileNormalizer:
-    def __init__(self, session: Session):
-        self.session = session
+    """Normalizes raw indicator values to 0-100 percentiles.
+
+    Opens a short-lived session per query (via the factory) so it can be
+    safely shared between request threads and the APScheduler thread.
+    """
+
+    def __init__(self, session_factory: sessionmaker):
+        self.session_factory = session_factory
         self._cache: dict[str, np.ndarray] = {}
 
     def warm_cache(self, indicator_names: list[str], years: int = 20) -> None:
@@ -27,16 +33,20 @@ class PercentileNormalizer:
     def _load_historical(self, series_id: str, years: int, as_of_date: date | None = None) -> np.ndarray:
         reference = as_of_date or date.today()
         cutoff = reference - timedelta(days=years * 365)
-        rows = (
-            self.session.query(IndicatorSeries.value)
-            .filter(
-                IndicatorSeries.series_id == series_id,
-                IndicatorSeries.date >= cutoff,
-                IndicatorSeries.date <= reference,
+        session = self.session_factory()
+        try:
+            rows = (
+                session.query(IndicatorSeries.value)
+                .filter(
+                    IndicatorSeries.series_id == series_id,
+                    IndicatorSeries.date >= cutoff,
+                    IndicatorSeries.date <= reference,
+                )
+                .order_by(IndicatorSeries.date)
+                .all()
             )
-            .order_by(IndicatorSeries.date)
-            .all()
-        )
+        finally:
+            session.close()
         return np.array([r[0] for r in rows], dtype=float)
 
     # Synthetic historical baselines for series with insufficient DB history.

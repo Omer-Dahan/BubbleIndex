@@ -24,11 +24,13 @@ def _value_n_days_ago(df: pd.DataFrame, n: int) -> float | None:
         return None
 
 
+# DDDM01USA156NWDB is an annual World Bank series published with a multi-year
+# lag, so a wide staleness window is expected. A price-index/GDP proxy is NOT a
+# valid fallback: it is dimensionally different from market-cap/GDP and breaks
+# percentile normalization against the DDDM history.
 def compute_buffett_indicator(
     buffett_df: pd.DataFrame | None,
-    wilshire_df: pd.DataFrame | None,
-    gdp_df: pd.DataFrame | None,
-    max_stale_days: int = 400,
+    max_stale_days: int = 1100,
 ) -> tuple[float | None, str]:
     v = _latest(buffett_df)
     if v is not None and not buffett_df.empty:
@@ -39,10 +41,6 @@ def compute_buffett_indicator(
             last_date = last_date.date()
         if (date.today() - last_date).days <= max_stale_days:
             return v, "DDDM01USA156NWDB"
-    w = _latest(wilshire_df)
-    g = _latest(gdp_df)
-    if w is not None and g is not None and g > 0:
-        return (w / g) * 100, "wilshire/gdp"
     return None, "unavailable"
 
 

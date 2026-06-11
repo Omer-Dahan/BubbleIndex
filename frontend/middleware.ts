@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export function middleware(request: NextRequest) {
+  // The /backend rewrite proxies to the API server from the Next server itself,
+  // bypassing any IP allowlist on the backend — restrict it to read-only requests.
+  if (request.nextUrl.pathname.startsWith('/backend/') && request.method !== 'GET') {
+    return new NextResponse('Method Not Allowed', { status: 405 });
+  }
+
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const apiOrigin = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
   // Next.js dev mode (Fast Refresh / webpack eval-source-map) requires 'unsafe-eval' to execute

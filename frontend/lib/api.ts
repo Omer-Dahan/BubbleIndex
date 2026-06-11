@@ -15,7 +15,6 @@ async function apiFetch<T>(path: string, init?: RequestInit & { next?: { revalid
 export const api = {
   getRiskScore: (init?: any) => apiFetch<RiskScoreResponse>('/api/v1/risk-score/current', init),
   getLatestScore: (init?: any) => apiFetch<RiskScoreResponse>('/api/v1/risk-score/latest', init),
-  refreshScore: () => apiFetch<RiskScoreResponse>('/api/v1/risk-score/refresh', { method: 'POST' }),
   getSnapshots: (days = 365, init?: any) => {
     const end = new Date().toISOString().split('T')[0];
     const start = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
