@@ -57,6 +57,7 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
   const [activeCrisisInfo, setActiveCrisisInfo] = useState<any | null>(null);
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
   const similarities = data?.crisis_similarities ?? [];
   const topSimilar = similarities[0];
@@ -192,20 +193,74 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
     });
   }, [filtered]);
 
+  const handleChartInteraction = (clientX: number, currentTarget: SVGSVGElement) => {
+    if (filtered.length < 2) return null;
+    const rect = currentTarget.getBoundingClientRect();
+    const clickX = ((clientX - rect.left) / rect.width) * 800; // SVG viewBox width is 800
+    
+    const xMin = 40;
+    const xMax = 790;
+    const span = xMax - xMin; // 750
+    
+    const clampedX = Math.max(xMin, Math.min(xMax, clickX));
+    const pct = (clampedX - xMin) / span;
+    const approxIdx = pct * (filtered.length - 1);
+    const nearestIdx = Math.round(approxIdx);
+    return filtered[nearestIdx] ?? null;
+  };
+
+  const handleChartClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const matched = handleChartInteraction(e.clientX, e.currentTarget);
+    if (matched) {
+      const yearStr = matched.snapshot_date.slice(0, 4);
+      setSelectedYear(yearStr);
+      setSelectedDate(matched.snapshot_date);
+    }
+  };
+
+  const handleChartMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const matched = handleChartInteraction(e.clientX, e.currentTarget);
+    if (matched) {
+      setHoveredDate(matched.snapshot_date);
+    }
+  };
+
+  const handleChartMouseLeave = () => {
+    setHoveredDate(null);
+  };
+
+  const handleChartTouchStart = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches[0]) {
+      const matched = handleChartInteraction(e.touches[0].clientX, e.currentTarget);
+      if (matched) {
+        const yearStr = matched.snapshot_date.slice(0, 4);
+        setSelectedYear(yearStr);
+        setSelectedDate(matched.snapshot_date);
+      }
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)', direction: isRtl ? 'rtl' : 'ltr' }}>
       <Topbar palette={palette} onCyclePalette={onCyclePalette} onOpenTweaks={onOpenTweaks} />
-      <div style={{ flex: 1, padding: 'var(--pad-screen)', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 380px', gap: 'var(--gap-grid)', minHeight: 0, overflow: isMobile ? 'visible' : 'hidden' }}>
+      <div className="historical-grid" style={{ flex: 1, padding: 'var(--pad-screen)', display: 'grid', gap: 'var(--gap-grid)', minHeight: 0 }}>
 
         {/* LEFT */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)' }}>
           <motion.div
             variants={fadeUp} custom={0} initial="hidden" animate="visible"
-            style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexDirection: isRtl ? 'row-reverse' : 'row' }}
+            style={{
+              display: 'flex',
+              alignItems: 'flex-end',
+              justifyContent: 'space-between',
+              flexDirection: isRtl ? 'row-reverse' : 'row',
+              flexWrap: 'wrap',
+              gap: 16
+            }}
           >
-            <div style={{ textAlign: isRtl ? 'right' : 'left' }}>
+            <div style={{ flex: '1 1 300px', textAlign: isRtl ? 'right' : 'left' }}>
               <div className="bi-eyebrow">{t('historical.title')}</div>
-              <h1 style={{ fontSize: 28, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 6, color: 'var(--ink-1)' }}>
+              <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 6, color: 'var(--ink-1)' }}>
                 {topSimilar
                   ? t('historical.subtitleWithAnalog', { analog: topSimilarName })
                   : t('historical.subtitleDefault')}
@@ -216,7 +271,7 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                   : t('historical.noData')}
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div style={{ display: 'flex', gap: 6, justifyContent: isRtl ? 'flex-end' : 'flex-start', flexWrap: 'wrap' }}>
               {TIME_RANGES.map((l, i) => (
                 <motion.button
                   key={l}
@@ -247,15 +302,25 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
               <div className="mono" style={{ fontSize: 11, color: 'var(--ink-4)', letterSpacing: '0.08em' }}>{t('historical.chartSubtitle')}</div>
             </div>
             <div style={{ flex: 1, position: 'relative' }}>
-              <svg viewBox="0 0 800 320" width="100%" height="100%" preserveAspectRatio="none" style={{ display: 'block' }}>
+              <svg
+                viewBox="0 0 800 320"
+                width="100%"
+                height="100%"
+                preserveAspectRatio="none"
+                style={{ display: 'block', cursor: 'pointer' }}
+                onClick={handleChartClick}
+                onMouseMove={handleChartMouseMove}
+                onMouseLeave={handleChartMouseLeave}
+                onTouchStart={handleChartTouchStart}
+              >
                 {[0,1,2,3,4].map((i) => (
-                  <line key={i} x1="40" x2="790" y1={30 + i * 60} y2={30 + i * 60} stroke="var(--hairline)" strokeDasharray="2 4" />
+                  <line key={i} x1="40" x2="790" y1={30 + i * 60} y2={30 + i * 60} stroke="var(--hairline)" strokeDasharray="2 4" style={{ pointerEvents: 'none' }} />
                 ))}
                 {[0,25,50,75,100].map((m, i) => (
-                  <text key={m} x="30" y={30 + (4-i)*60+3} fontSize="11" fontFamily="var(--font-mono)" fill="var(--ink-4)" textAnchor="end">{m}</text>
+                  <text key={m} x="30" y={30 + (4-i)*60+3} fontSize="11" fontFamily="var(--font-mono)" fill="var(--ink-4)" textAnchor="end" style={{ pointerEvents: 'none' }}>{m}</text>
                 ))}
-                <rect x="40" y="30" width="750" height="60" fill="var(--t-8)" opacity="0.05" />
-                <text x="60" y="52" fontSize="10" fontFamily="var(--font-mono)" letterSpacing="0.12em" fill="var(--t-8)" opacity="0.8">{t('historical.bubbleLabel')}</text>
+                <rect x="40" y="30" width="750" height="60" fill="var(--t-8)" opacity="0.05" style={{ pointerEvents: 'none' }} />
+                <text x="60" y="52" fontSize="10" fontFamily="var(--font-mono)" letterSpacing="0.12em" fill="var(--t-8)" opacity="0.8" style={{ pointerEvents: 'none' }}>{t('historical.bubbleLabel')}</text>
 
                 {/* Crisis markers with staggered fade-in */}
                 {crisisMarkers.map((m, i) => (
@@ -264,6 +329,7 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.7 + i * 0.07, duration: 0.3 }}
+                    style={{ pointerEvents: 'none' }}
                   >
                     <line x1={m.x} x2={m.x} y1="30" y2="270" stroke="var(--hairline-2)" strokeDasharray="3 3" strokeWidth="1" />
                     <text x={m.x} y="285" fontSize="9" fontFamily="var(--font-mono)" fill="var(--ink-4)" textAnchor="middle">{m.label}</text>
@@ -283,8 +349,24 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                     initial={{ pathLength: 0, opacity: 0 }}
                     animate={{ pathLength: 1, opacity: 1 }}
                     transition={{ pathLength: { duration: 1.4, ease: 'easeInOut' as const }, opacity: { duration: 0.3 } }}
+                    style={{ pointerEvents: 'none' }}
                   />
                 )}
+
+                {/* Highlight hovered date */}
+                {hoveredDate && hoveredDate !== selectedDate && filtered.length >= 2 && (() => {
+                  const idx = filtered.findIndex(s => s.snapshot_date === hoveredDate);
+                  if (idx < 0) return null;
+                  const x = 40 + (idx / (filtered.length - 1)) * 750;
+                  const y = 30 + (1 - filtered[idx].composite_score / 100) * 240;
+                  const color = tempVar(filtered[idx].composite_score);
+                  return (
+                    <g style={{ pointerEvents: 'none' }}>
+                      <line x1={x} x2={x} y1="30" y2="270" stroke="var(--hairline-2)" strokeWidth="1.2" strokeDasharray="3 3" />
+                      <circle cx={x} cy={y} r="4.5" fill={color} opacity="0.75" />
+                    </g>
+                  );
+                })()}
 
                 {/* Highlight selected date */}
                 {selectedDate && filtered.length >= 2 && (() => {
@@ -297,15 +379,16 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
                       initial={{ opacity: 0, scale: 0.5 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ duration: 0.25 }}
+                      style={{ pointerEvents: 'none' }}
                     >
                       <line x1={x} x2={x} y1="30" y2="270" stroke="var(--t-7)" strokeWidth="1.5" />
-                      <circle cx={x} cy={y} r="5" fill="var(--t-7)" />
+                      <circle cx={x} cy={y} r="5.5" fill="var(--t-7)" stroke="var(--bg)" strokeWidth="1.5" />
                     </motion.g>
                   );
                 })()}
 
                 {filtered.length === 0 && (
-                  <text x="400" y="160" fontSize="13" fontFamily="var(--font-mono)" fill="var(--ink-4)" textAnchor="middle">{t('historical.noData')}</text>
+                  <text x="400" y="160" fontSize="13" fontFamily="var(--font-mono)" fill="var(--ink-4)" textAnchor="middle" style={{ pointerEvents: 'none' }}>{t('historical.noData')}</text>
                 )}
               </svg>
             </div>
@@ -691,6 +774,18 @@ export default function ScreenHistorical({ data, snapshots, palette, onCyclePale
           );
         })()}
       </AnimatePresence>
+      <style jsx global>{`
+        .historical-grid {
+          grid-template-columns: minmax(0, 1fr) 380px;
+          overflow: hidden;
+        }
+        @media (max-width: 900px) {
+          .historical-grid {
+            grid-template-columns: minmax(0, 1fr);
+            overflow: visible;
+          }
+        }
+      `}</style>
     </div>
   );
 }

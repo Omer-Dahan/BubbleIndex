@@ -125,7 +125,7 @@ export default function ScreenMethodologyDetail({ category, palette, onCyclePale
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 240 }}>
               <div className="bi-eyebrow">{t('methodology.heroEyebrow')}</div>
-              <h1 style={{ fontSize: 36, fontWeight: 300, letterSpacing: '-0.025em', color: 'var(--ink-1)', margin: '8px 0 6px', fontFamily: 'var(--font-display)' }}>
+              <h1 style={{ fontSize: isMobile ? 24 : 36, fontWeight: 300, letterSpacing: '-0.025em', color: 'var(--ink-1)', margin: '8px 0 6px', fontFamily: 'var(--font-display)' }}>
                 {detail.display_name}
               </h1>
               <div style={{ fontSize: 16, color: 'var(--ink-3)', lineHeight: 1.5, textWrap: 'pretty' } as React.CSSProperties}>
@@ -214,8 +214,10 @@ export default function ScreenMethodologyDetail({ category, palette, onCyclePale
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {detail.episodes.map((ep: any, i: number) => (
               <div key={i} style={{
-                display: 'grid', gridTemplateColumns: '90px 1fr 1fr',
-                gap: 16, padding: '14px 0',
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : '90px 1fr 1fr',
+                gap: isMobile ? 8 : 16,
+                padding: '14px 0',
                 borderTop: i > 0 ? '1px solid var(--hairline)' : 'none',
                 alignItems: 'start',
               }}>

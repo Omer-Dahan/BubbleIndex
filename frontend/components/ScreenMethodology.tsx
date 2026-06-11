@@ -163,17 +163,32 @@ export default function ScreenMethodology({ data, palette, onCyclePalette, onOpe
       <Topbar palette={palette} onCyclePalette={onCyclePalette} onOpenTweaks={onOpenTweaks} />
       <div style={{ flex: 1, padding: 'var(--pad-screen)', display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)' }}>
 
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24 }}>
-          <div style={{ maxWidth: 760 }}>
+        <div className="methodology-header" style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          flexDirection: isRtl ? 'row-reverse' : 'row',
+          flexWrap: 'wrap',
+          gap: 16
+        }}>
+          <div style={{ flex: '1 1 300px', maxWidth: 760 }}>
             <div className="bi-eyebrow">{t('methodology.eyebrow')}</div>
-            <h1 style={{ fontSize: 30, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 6, textWrap: 'balance' } as React.CSSProperties}>
+            <h1 style={{ fontSize: isMobile ? 22 : 30, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 6, textWrap: 'balance' } as React.CSSProperties}>
               {t('methodology.title', { count: activeCats.length })}
             </h1>
             <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 8, lineHeight: 1.55, textWrap: 'pretty' } as React.CSSProperties}>
               {t('methodology.desc', { seventy: '70' })}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+          <div style={{
+            display: 'flex',
+            gap: 10,
+            alignItems: 'center',
+            flexShrink: 0,
+            justifyContent: isRtl ? 'flex-end' : 'flex-start',
+            flexWrap: 'wrap',
+            flexDirection: isRtl ? 'row-reverse' : 'row'
+          }}>
             <div style={{ padding: '8px 14px', border: '1px solid var(--hairline)', borderRadius: 8, background: 'var(--panel-2)' }}>
               <div className="bi-eyebrow" style={{ fontSize: 9 }}>{t('methodology.active')}</div>
               <div className="mono tnum" style={{ fontSize: 18, color: 'var(--ink-1)', marginTop: 2 }}>{activeCats.length} <span style={{ color: 'var(--ink-4)', fontSize: 11 }}>/ {cats.length}</span></div>
@@ -191,8 +206,16 @@ export default function ScreenMethodology({ data, palette, onCyclePalette, onOpe
 
         {/* Weight bar */}
         <div className="bi-card bi-card-tight">
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div className="bi-card-title">{t('methodology.weightMix')}</div>
+          <div className="weight-mix-header" style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            flexDirection: isRtl ? 'row-reverse' : 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+            marginBottom: 10
+          }}>
+            <div className="bi-card-title" style={{ margin: 0 }}>{t('methodology.weightMix')}</div>
             <div className="mono" style={{ fontSize: 10, color: 'var(--ink-4)', letterSpacing: '0.12em' }}>{t('methodology.activeMixLabel', { count: activeCats.length })}</div>
           </div>
           <div style={{ display: 'flex', height: 14, borderRadius: 7, overflow: 'hidden', border: '1px solid var(--hairline)' }}>
@@ -209,13 +232,13 @@ export default function ScreenMethodology({ data, palette, onCyclePalette, onOpe
                   letterSpacing: '0.06em', cursor: 'pointer', textDecoration: 'none',
                 }}
               >
-                {c.display_name.toUpperCase()} · {Math.round(c.weight * 100)}%
+                <span className="weight-bar-text">{c.display_name.toUpperCase()} · {Math.round(c.weight * 100)}%</span>
               </Link>
             ))}
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)', gap: 'var(--gap-grid)', paddingBottom: 32 }}>
+        <div className="methodology-grid" style={{ gap: 'var(--gap-grid)', paddingBottom: 32 }}>
           {cats.map((cat) => (
             <CategoryCard
               key={cat.id}
@@ -225,6 +248,25 @@ export default function ScreenMethodology({ data, palette, onCyclePalette, onOpe
           ))}
         </div>
       </div>
+      <style jsx global>{`
+        .methodology-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+        }
+        @media (max-width: 1024px) {
+          .methodology-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+        @media (max-width: 767px) {
+          .methodology-grid {
+            grid-template-columns: 1fr;
+          }
+          .weight-bar-text {
+            display: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }

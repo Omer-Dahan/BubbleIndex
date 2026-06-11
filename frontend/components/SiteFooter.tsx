@@ -2,9 +2,11 @@
 import React from 'react';
 import Link from 'next/link';
 import { useLanguage } from '@/lib/LanguageContext';
+import { useIsMobile } from '@/lib/useBreakpoint';
 
 export default function SiteFooter() {
   const { t, isRtl } = useLanguage();
+  const isMobile = useIsMobile();
 
   const footerCols = (t('footer.cols') || []) as { title: string; links: string[] }[];
   const colHrefs = ['/about', '/contact', '/methodology', '/changelog', '/api-access'];
@@ -103,7 +105,7 @@ export default function SiteFooter() {
       {/* Brand + copyright row */}
       <div style={{
         padding: '10px var(--pad-screen)',
-        paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
+        paddingBottom: `calc(${isMobile ? 76 : 10}px + env(safe-area-inset-bottom))`,
         display: 'flex',
         alignItems: 'center',
         gap: 0,

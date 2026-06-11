@@ -352,8 +352,9 @@ interface OdometerTextProps {
 }
 
 function OdometerText({ text, direction }: OdometerTextProps) {
+  const isNumeric = /^[0-9.,\s-]+$/.test(text);
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', direction: isNumeric ? 'ltr' : undefined }}>
       {text.split('').map((char, idx) => {
         if (char === ' ' || char === '-' || char === '/') {
           return (
@@ -412,11 +413,97 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
   const [playDirection, setPlayDirection] = useState<'forward' | 'backward'>('forward');
   const [speed, setSpeed] = useState<Speed>('8×');
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const dialRef = useRef<HTMLDivElement>(null);
+  const lastAngleRef = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isDialDragging, setIsDialDragging] = useState(false);
   const [imgError, setImgError] = useState(false);
 
   const totalPoints = usingRealData ? sorted.length : 600;
   const clampedIdx = Math.min(Math.max(scrubIdx, 0), totalPoints - 1);
+
+  const scrubIdxRef = useRef<number>(usingRealData ? sorted.length - 1 : Math.round(0.97 * 599));
+
+  const [mobileStartYear, setMobileStartYear] = useState<number>(() => {
+    if (usingRealData && sorted.length > 0) {
+      return Math.floor(parseInt(sorted[0].snapshot_date.slice(0, 4)) / 10) * 10;
+    }
+    return 1900;
+  });
+
+  const mobilePointsRange = useMemo(() => {
+    if (!isMobile) return { startIdx: 0, endIdx: totalPoints - 1 };
+    
+    let startIdx = 0;
+    let endIdx = totalPoints - 1;
+    
+    if (usingRealData) {
+      const startStr = `${mobileStartYear}-01-01`;
+      const endStr = `${mobileStartYear + 10}-01-01`;
+      
+      const first = sorted.findIndex(s => s.snapshot_date >= startStr);
+      const last = [...sorted].reverse().findIndex(s => s.snapshot_date < endStr);
+      
+      if (first !== -1) startIdx = first;
+      if (last !== -1) endIdx = sorted.length - 1 - last;
+      
+      if (startIdx > endIdx) {
+        startIdx = 0;
+        endIdx = sorted.length - 1;
+      }
+    } else {
+      const yearsSpan = 125;
+      const pointsPerYear = 600 / yearsSpan;
+      startIdx = Math.max(0, Math.min(599, Math.round((mobileStartYear - 1900) * pointsPerYear)));
+      endIdx = Math.max(0, Math.min(599, Math.round((mobileStartYear + 10 - 1900) * pointsPerYear)));
+    }
+    
+    return { startIdx, endIdx };
+  }, [isMobile, mobileStartYear, totalPoints, usingRealData, sorted]);
+
+  const chartPts = useMemo(() => {
+    const pts = usingRealData ? sorted : fallback.map((v, i) => ({ composite_score: v * 100, _i: i }));
+    return pts.slice(mobilePointsRange.startIdx, mobilePointsRange.endIdx + 1);
+  }, [usingRealData, sorted, fallback, mobilePointsRange]);
+
+  const timelineBounds = useMemo(() => {
+    let firstMs = 0;
+    let lastMs = 0;
+    if (isMobile) {
+      firstMs = new Date(`${mobileStartYear}-01-01`).getTime();
+      lastMs  = new Date(`${mobileStartYear + 10}-01-01`).getTime();
+    } else {
+      if (usingRealData && sorted.length > 0) {
+        firstMs = new Date(sorted[0].snapshot_date).getTime();
+        lastMs  = new Date(sorted[sorted.length - 1].snapshot_date).getTime();
+      } else {
+        firstMs = new Date('1900-01-01').getTime();
+        lastMs  = new Date('2025-01-01').getTime();
+      }
+    }
+    return { firstMs, lastMs };
+  }, [isMobile, mobileStartYear, usingRealData, sorted]);
+
+  const getPointTimeMs = useCallback((p: any, index: number) => {
+    if (usingRealData) {
+      return new Date(p.snapshot_date).getTime();
+    } else {
+      const origIdx = p._i ?? index;
+      const year = 1900 + (origIdx / 599) * 125;
+      const yearInt = Math.floor(year);
+      const yearFrac = year - yearInt;
+      const date = new Date(`${yearInt}-01-01`);
+      date.setMilliseconds(date.getMilliseconds() + yearFrac * 365 * 24 * 60 * 60 * 1000);
+      return date.getTime();
+    }
+  }, [usingRealData]);
+
+  // Sync scrubIdxRef when not dragging the dial
+  useEffect(() => {
+    if (!isDialDragging) {
+      scrubIdxRef.current = scrubIdx;
+    }
+  }, [scrubIdx, isDialDragging]);
 
   // Auto-reset scrubIdx when data loads
   useEffect(() => {
@@ -450,12 +537,27 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
     const rect = chartContainerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const targetIdx = Math.round(frac * (totalPoints - 1));
     
-    setPlayDirection(targetIdx >= scrubIdx ? 'forward' : 'backward');
+    const targetTimeMs = timelineBounds.firstMs + frac * (timelineBounds.lastMs - timelineBounds.firstMs);
+    const pts = usingRealData ? sorted : fallback.map((v, i) => ({ composite_score: v * 100, _i: i }));
+    
+    let minDiff = Infinity;
+    let targetIdx = 0;
+    
+    for (let i = 0; i < pts.length; i++) {
+      const t = getPointTimeMs(pts[i], i);
+      const diff = Math.abs(t - targetTimeMs);
+      if (diff < minDiff) {
+        minDiff = diff;
+        targetIdx = i;
+      }
+    }
+    
+    setPlayDirection(targetIdx >= scrubIdxRef.current ? 'forward' : 'backward');
     setScrubIdx(targetIdx);
+    scrubIdxRef.current = targetIdx;
     setIsPlaying(false);
-  }, [totalPoints, scrubIdx]);
+  }, [usingRealData, sorted, fallback, timelineBounds, getPointTimeMs]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return; // Only left click
@@ -482,9 +584,75 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
     }
   }, [isDragging, handleChartInteraction]);
 
+  const getPointerAngle = (clientX: number, clientY: number) => {
+    const rect = dialRef.current?.getBoundingClientRect();
+    if (!rect) return 0;
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const dx = clientX - centerX;
+    const dy = clientY - centerY;
+    return Math.atan2(dy, dx);
+  };
+
+  const handleDialInteraction = useCallback((clientX: number, clientY: number) => {
+    const newAngle = getPointerAngle(clientX, clientY);
+    if (lastAngleRef.current === null) {
+      lastAngleRef.current = newAngle;
+      return;
+    }
+
+    let delta = newAngle - lastAngleRef.current;
+    if (delta > Math.PI) delta -= 2 * Math.PI;
+    if (delta < -Math.PI) delta += 2 * Math.PI;
+
+    lastAngleRef.current = newAngle;
+
+    // 240 index points per full 360 degree rotation (damped for precision)
+    const pointsPerRotation = 240;
+    const deltaIdx = (delta / (2 * Math.PI)) * pointsPerRotation;
+
+    scrubIdxRef.current = Math.max(0, Math.min(totalPoints - 1, scrubIdxRef.current + deltaIdx));
+    const targetIdx = Math.round(scrubIdxRef.current);
+
+    if (targetIdx !== scrubIdx) {
+      setPlayDirection(targetIdx >= scrubIdx ? 'forward' : 'backward');
+      setScrubIdx(targetIdx);
+    }
+    setIsPlaying(false);
+  }, [totalPoints, scrubIdx]);
+
+  const handleDialMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return; // Only left click
+    lastAngleRef.current = null;
+    setIsDialDragging(true);
+    handleDialInteraction(e.clientX, e.clientY);
+  }, [handleDialInteraction]);
+
+  const handleDialMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDialDragging) return;
+    handleDialInteraction(e.clientX, e.clientY);
+  }, [isDialDragging, handleDialInteraction]);
+
+  const handleDialTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    lastAngleRef.current = null;
+    setIsDialDragging(true);
+    if (e.touches[0]) {
+      handleDialInteraction(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, [handleDialInteraction]);
+
+  const handleDialTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isDialDragging) return;
+    if (e.touches[0]) {
+      handleDialInteraction(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, [isDialDragging, handleDialInteraction]);
+
   useEffect(() => {
     const handleGlobalMouseUp = () => {
       setIsDragging(false);
+      setIsDialDragging(false);
+      lastAngleRef.current = null;
     };
     window.addEventListener('mouseup', handleGlobalMouseUp);
     window.addEventListener('touchend', handleGlobalMouseUp);
@@ -582,6 +750,35 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
     return 2025;
   }, [usingRealData, sorted]);
 
+  // Auto-shift the mobile decade window if the active index goes out of bounds
+  useEffect(() => {
+    if (!isMobile) return;
+    const currentYear = parseInt(currentDate.slice(0, 4), 10);
+    if (isNaN(currentYear)) return;
+    
+    if (currentYear < mobileStartYear || currentYear >= mobileStartYear + 10) {
+      const targetDecade = Math.floor(currentYear / 10) * 10;
+      setMobileStartYear(targetDecade);
+    }
+  }, [currentDate, isMobile, mobileStartYear]);
+
+  const handleDecadeChange = (targetDecade: number) => {
+    setMobileStartYear(targetDecade);
+    
+    if (usingRealData) {
+      const targetDate = `${targetDecade}-01-01`;
+      const matchedIdx = sorted.findIndex(s => s.snapshot_date >= targetDate);
+      if (matchedIdx !== -1) {
+        setPlayDirection(matchedIdx >= scrubIdx ? 'forward' : 'backward');
+        setScrubIdx(matchedIdx);
+      }
+    } else {
+      const targetIdx = Math.max(0, Math.min(599, Math.round(((targetDecade - 1900) / 125) * 599)));
+      setPlayDirection(targetIdx >= scrubIdx ? 'forward' : 'backward');
+      setScrubIdx(targetIdx);
+    }
+  };
+
   // Generate Year labels positioned along the dial perimeter
   const dialYearLabels = useMemo(() => {
     const yearsArray: number[] = [];
@@ -592,7 +789,23 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
     for (let y = firstLabel; y <= endYear; y += step) {
       yearsArray.push(y);
     }
-    return yearsArray;
+    
+    // Filter to prevent overlap (especially at start/end boundary)
+    const filtered: number[] = [];
+    for (const y of yearsArray) {
+      const angle = ((y - startYear) / span) * 360;
+      // Check distance to all already added labels
+      const hasOverlap = filtered.some(existing => {
+        const existingAngle = ((existing - startYear) / span) * 360;
+        const diff = Math.abs(angle - existingAngle);
+        const distance = Math.min(diff, 360 - diff);
+        return distance < 28; // minimum 28 degrees separation
+      });
+      if (!hasOverlap) {
+        filtered.push(y);
+      }
+    }
+    return filtered;
   }, [startYear, endYear]);
 
   // Dynamic rotation calculations
@@ -602,31 +815,32 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
 
   // Build SVG path
   const chartPath = useMemo(() => {
-    const pts = usingRealData ? sorted : fallback.map((v, i) => ({ composite_score: v * 100, _i: i }));
-    if (pts.length < 2) return '';
-    return pts.map((p, i) => {
-      const x = (i / (pts.length - 1)) * 1280;
+    if (chartPts.length < 2) return '';
+    return chartPts.map((p, i) => {
+      const t = getPointTimeMs(p, p._i ?? (mobilePointsRange.startIdx + i));
+      const x = ((t - timelineBounds.firstMs) / (timelineBounds.lastMs - timelineBounds.firstMs)) * 1280;
       const score = usingRealData ? (p as SnapshotSummary).composite_score : (p as { composite_score: number }).composite_score;
       const y = 20 + (1 - score / 100) * 260;
       return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
     }).join(' ');
-  }, [usingRealData, sorted, fallback]);
+  }, [usingRealData, chartPts, timelineBounds, getPointTimeMs, mobilePointsRange]);
 
   // Crisis marker positions
   const crisisMarkers = useMemo(() => {
     if (!usingRealData || sorted.length < 2) return [];
-    const firstMs = new Date(sorted[0].snapshot_date).getTime();
-    const lastMs  = new Date(sorted[sorted.length - 1].snapshot_date).getTime();
-    const span = lastMs - firstMs;
     return CRISIS_EVENTS.flatMap(ev => {
       const t = new Date(`${ev.year}-06-01`).getTime();
-      if (t < firstMs || t > lastMs) return [];
-      return [{ ...ev, x: ((t - firstMs) / span) * 1280 }];
+      if (t < timelineBounds.firstMs || t > timelineBounds.lastMs) return [];
+      const x = ((t - timelineBounds.firstMs) / (timelineBounds.lastMs - timelineBounds.firstMs)) * 1280;
+      return [{ ...ev, x }];
     });
-  }, [usingRealData, sorted]);
+  }, [usingRealData, sorted, timelineBounds]);
 
   // Scrubber timeline markers
   const scrubYears = useMemo(() => {
+    if (isMobile) {
+      return Array.from({ length: 6 }, (_, i) => mobileStartYear + i * 2);
+    }
     if (usingRealData && sorted.length >= 2) {
       const first = parseInt(sorted[0].snapshot_date.slice(0, 4));
       const last  = parseInt(sorted[sorted.length - 1].snapshot_date.slice(0, 4));
@@ -634,21 +848,28 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
       return Array.from({ length: 6 }, (_, i) => Math.min(first + i * step, last));
     }
     return [1900, 1925, 1950, 1975, 2000, 2025];
-  }, [usingRealData, sorted]);
+  }, [isMobile, mobileStartYear, usingRealData, sorted]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)', direction: isRtl ? 'rtl' : 'ltr' }}>
       <Topbar palette={palette} onCyclePalette={onCyclePalette} onOpenTweaks={onOpenTweaks} />
-      <div style={{ flex: 1, padding: 'var(--pad-screen)', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 380px', gap: 'var(--gap-grid)', minHeight: 0 }}>
+      <div className="replay-grid" style={{ flex: 1, padding: 'var(--pad-screen)', display: 'grid', gap: 'var(--gap-grid)', minHeight: 0 }}>
 
         {/* LEFT COLUMN: Controls, Graph and Scrubber */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-grid)' }}>
           
           {/* Header & Controls Panel */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexDirection: isRtl ? 'row-reverse' : 'row' }}>
-            <div style={{ textAlign: isRtl ? 'right' : 'left' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            flexDirection: isRtl ? 'row-reverse' : 'row',
+            flexWrap: 'wrap',
+            gap: 16
+          }}>
+            <div style={{ flex: '1 1 300px', textAlign: isRtl ? 'right' : 'left' }}>
               <div className="bi-eyebrow">{t('replay.title')}</div>
-              <h1 style={{ fontSize: 28, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 6, color: 'var(--ink-1)' }}>
+              <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 300, letterSpacing: '-0.02em', marginTop: 6, color: 'var(--ink-1)' }}>
                 {usingRealData
                   ? t('replay.subtitle', { start: sorted[0]?.snapshot_date?.slice(0, 4), count: sorted.length })
                   : t('replay.subtitleFallback')}
@@ -656,7 +877,14 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
             </div>
 
             {/* Playback & Speed controls */}
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+            <div style={{
+              display: 'flex',
+              gap: 12,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              justifyContent: isRtl ? 'flex-end' : 'flex-start',
+              flexDirection: isRtl ? 'row-reverse' : 'row'
+            }}>
               <div style={{ display: 'flex', gap: 4, background: 'var(--panel-2)', border: '1px solid var(--hairline)', borderRadius: 8, padding: 3, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
                 <button
                   onClick={() => handlePlayControl('jump-start')}
@@ -732,19 +960,61 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
           </div>
 
           {/* Chart & Timeline Card */}
-          <div className="bi-card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowX: isMobile ? 'auto' : 'visible' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
-              <h2 className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>
-                {t('replay.riskScoreLabel', { range: usingRealData ? `${sorted[0]?.snapshot_date?.slice(0, 4)} → ${isRtl ? 'היום' : 'TODAY'}` : `1900 → ${isRtl ? 'היום' : 'TODAY'}` })}
-              </h2>
-              {isPlaying && playDirection === 'backward' && (
-                <motion.span
-                  animate={{ opacity: [1, 0.4, 1] }}
-                  transition={{ repeat: Infinity, duration: 1 }}
-                  style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--t-8)', fontWeight: 600, letterSpacing: '0.08em' }}
-                >
-                  {t('replay.rewind')}
-                </motion.span>
+          <div className="bi-card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+                <h2 className="mono" style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)', margin: 0 }}>
+                  {t('replay.riskScoreLabel', { range: usingRealData ? `${sorted[0]?.snapshot_date?.slice(0, 4)} → ${isRtl ? 'היום' : 'TODAY'}` : `1900 → ${isRtl ? 'היום' : 'TODAY'}` })}
+                </h2>
+                {isPlaying && playDirection === 'backward' && (
+                  <motion.span
+                    animate={{ opacity: [1, 0.4, 1] }}
+                    transition={{ repeat: Infinity, duration: 1 }}
+                    style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--t-8)', fontWeight: 600, letterSpacing: '0.08em' }}
+                  >
+                    {t('replay.rewind')}
+                  </motion.span>
+                )}
+              </div>
+
+              {isMobile && (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', direction: 'ltr' }}>
+                  <button
+                    onClick={() => handleDecadeChange(mobileStartYear - 10)}
+                    disabled={mobileStartYear <= Math.floor(startYear / 10) * 10}
+                    style={{
+                      padding: '4px 10px',
+                      border: '1px solid var(--hairline)',
+                      borderRadius: 6,
+                      background: 'var(--panel-2)',
+                      color: 'var(--ink-1)',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      opacity: mobileStartYear <= Math.floor(startYear / 10) * 10 ? 0.35 : 1,
+                    }}
+                  >
+                    ‹ {isRtl ? 'קודם' : 'Prev'}
+                  </button>
+                  <span className="mono" style={{ fontSize: 12, color: 'var(--ink-1)', fontWeight: 600, minWidth: 46, textAlign: 'center' }}>
+                    {mobileStartYear}s
+                  </span>
+                  <button
+                    onClick={() => handleDecadeChange(mobileStartYear + 10)}
+                    disabled={mobileStartYear >= Math.floor(endYear / 10) * 10}
+                    style={{
+                      padding: '4px 10px',
+                      border: '1px solid var(--hairline)',
+                      borderRadius: 6,
+                      background: 'var(--panel-2)',
+                      color: 'var(--ink-1)',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      opacity: mobileStartYear >= Math.floor(endYear / 10) * 10 ? 0.35 : 1,
+                    }}
+                  >
+                    {isRtl ? 'הבא' : 'Next'} ›
+                  </button>
+                </div>
               )}
             </div>
 
@@ -756,7 +1026,6 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
               onTouchMove={handleTouchMove}
               style={{
                 width: '100%',
-                minWidth: isMobile ? 560 : undefined,
                 aspectRatio: '1280 / 360',
                 position: 'relative',
                 cursor: isPlaying ? 'pointer' : 'ew-resize',
@@ -807,7 +1076,16 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
 
                 {/* Scrub cursor line */}
                 {(() => {
-                  const x = scrubFrac * 1280;
+                  const pts = usingRealData ? sorted : fallback.map((v, i) => ({ composite_score: v * 100, _i: i }));
+                  const activePt = pts[clampedIdx];
+                  if (!activePt) return null;
+                  
+                  const t = getPointTimeMs(activePt, clampedIdx);
+                  if (t < timelineBounds.firstMs || t > timelineBounds.lastMs) {
+                    return null;
+                  }
+                  
+                  const x = ((t - timelineBounds.firstMs) / (timelineBounds.lastMs - timelineBounds.firstMs)) * 1280;
                   const y = currentSnap
                     ? 20 + (1 - currentScore / 100) * 260
                     : 20 + (1 - (fallback[clampedIdx] ?? 0.58)) * 260;
@@ -952,11 +1230,16 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
 
             {/* Rotating Wheel Plate */}
             <div
+              ref={dialRef}
+              className="time-dial-wheel"
+              onMouseDown={handleDialMouseDown}
+              onMouseMove={handleDialMouseMove}
+              onTouchStart={handleDialTouchStart}
+              onTouchMove={handleDialTouchMove}
               style={{
                 position: 'relative',
                 width: 250,
                 height: 250,
-                transform: isMobile ? 'scale(0.72)' : undefined,
                 transformOrigin: 'center center',
                 borderRadius: '50%',
                 background: 'radial-gradient(circle at 50% 50%, #15151b 0%, #0d0d11 60%, #08080a 100%)',
@@ -970,6 +1253,9 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
                 justifyContent: 'center',
                 margin: 'auto',
                 transition: 'box-shadow 0.25s ease',
+                cursor: isDialDragging ? 'grabbing' : 'grab',
+                touchAction: 'none',
+                userSelect: 'none',
               }}
             >
               {/* Outer physical ticks bezel */}
@@ -1161,6 +1447,20 @@ export default function ScreenReplay({ data, snapshots, palette, onCyclePalette,
         @keyframes pulseGlow {
           0%, 100% { opacity: 0.4; transform: scale(0.95); }
           50% { opacity: 0.95; transform: scale(1.08); }
+        }
+        .replay-grid {
+          grid-template-columns: minmax(0, 1fr) 380px;
+        }
+        @media (max-width: 900px) {
+          .replay-grid {
+            grid-template-columns: minmax(0, 1fr);
+          }
+        }
+        @media (max-width: 480px) {
+          .time-dial-wheel {
+            transform: scale(0.8) !important;
+            transform-origin: center center;
+          }
         }
       `}</style>
     </div>

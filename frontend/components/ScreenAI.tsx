@@ -116,7 +116,7 @@ export default function ScreenAI({ data, palette, onCyclePalette, onOpenTweaks }
             transition={{ type: 'spring', stiffness: 180, damping: 26 }}
           >
             <div className="bi-eyebrow">{t('ai.title', { date: formattedDate })}</div>
-            <h1 style={{ fontSize: 34, fontWeight: 300, letterSpacing: '-0.025em', marginTop: 8, lineHeight: 1.15, color: 'var(--ink-1)' }}>
+            <h1 style={{ fontSize: isMobile ? 24 : 34, fontWeight: 300, letterSpacing: '-0.025em', marginTop: 8, lineHeight: 1.15, color: 'var(--ink-1)' }}>
               {(() => {
                 const headlineTemplate = t('ai.headline', { tier: '___TIER___' });
                 const parts = headlineTemplate.split('___TIER___');
@@ -144,11 +144,34 @@ export default function ScreenAI({ data, palette, onCyclePalette, onOpenTweaks }
                 <motion.div
                   variants={feedItem}
                   className="bi-card bi-hoverable"
-                  style={{ display: 'grid', gridTemplateColumns: '130px 1fr 90px', gap: 18, alignItems: 'center', cursor: 'pointer' }}
+                  style={isMobile ? {
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    cursor: 'pointer'
+                  } : {
+                    display: 'grid',
+                    gridTemplateColumns: '130px 1fr 90px',
+                    gap: 18,
+                    alignItems: 'center',
+                    cursor: 'pointer'
+                  }}
                 >
-                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.10em' }}>{ins.tag}</div>
-                  <div style={{ fontSize: 15, color: 'var(--ink-1)', lineHeight: 1.5 }}>{ins.text}</div>
-                  <div className="mono" style={{ fontSize: 12, letterSpacing: '0.12em', fontWeight: 600, color: ins.tone, textAlign: isRtl ? 'left' : 'right' }}>{ins.verb}</div>
+                  {isMobile ? (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexDirection: isRtl ? 'row-reverse' : 'row' }}>
+                        <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.10em' }}>{ins.tag}</div>
+                        <div className="mono" style={{ fontSize: 12, letterSpacing: '0.12em', fontWeight: 600, color: ins.tone }}>{ins.verb}</div>
+                      </div>
+                      <div style={{ fontSize: 15, color: 'var(--ink-1)', lineHeight: 1.5, textAlign: isRtl ? 'right' : 'left' }}>{ins.text}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '0.10em' }}>{ins.tag}</div>
+                      <div style={{ fontSize: 15, color: 'var(--ink-1)', lineHeight: 1.5 }}>{ins.text}</div>
+                      <div className="mono" style={{ fontSize: 12, letterSpacing: '0.12em', fontWeight: 600, color: ins.tone, textAlign: isRtl ? 'left' : 'right' }}>{ins.verb}</div>
+                    </>
+                  )}
                 </motion.div>
               </Link>
             ))}
